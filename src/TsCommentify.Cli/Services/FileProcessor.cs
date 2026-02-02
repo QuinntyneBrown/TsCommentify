@@ -22,6 +22,13 @@ public class FileProcessor : IFileProcessor
         _logger = logger;
         _options = configuration.GetSection(FileProcessorOptions.SectionName).Get<FileProcessorOptions>() 
             ?? new FileProcessorOptions();
+        
+        // Apply default ignore patterns if none are configured
+        if (_options.IgnorePatterns.Count == 0)
+        {
+            _options.IgnorePatterns.Add("*.spec.ts");
+            _options.IgnorePatterns.Add("*.test.ts");
+        }
     }
 
     public async Task ProcessFileAsync(string filePath)

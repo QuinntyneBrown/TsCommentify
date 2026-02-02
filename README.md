@@ -14,7 +14,8 @@ A CLI tool that automatically adds JSDoc comments to TypeScript functions using 
 - **Type-Aware**: Recognizes TypeScript type annotations for parameters and return types
 - **Comment Detection**: Skips functions that already have comments
 - **Batch Processing**: Process single files or entire directories recursively
-- **Smart Filtering**: Automatically excludes `node_modules`, `dist`, and `.d.ts` files
+- **Smart Filtering**: Automatically excludes `node_modules`, `dist`, `.d.ts` files, and test files (`*.spec.ts`, `*.test.ts`)
+- **Configurable Ignore Patterns**: Customize which files to ignore via `appsettings.json`
 
 ## Installation
 
@@ -47,6 +48,24 @@ tc path/to/project
 ```
 
 The tool will recursively scan all `.ts` and `.tsx` files in the directory and add comments to functions that don't have them.
+
+### Configuration
+
+You can customize the ignore patterns by creating an `appsettings.json` file in the directory where you run the command:
+
+```json
+{
+  "FileProcessor": {
+    "IgnorePatterns": [
+      "*.spec.ts",
+      "*.test.ts",
+      "*.mock.ts"
+    ]
+  }
+}
+```
+
+By default, the tool ignores `*.spec.ts` and `*.test.ts` files. You can override this by providing your own list of patterns in the configuration file. Patterns support wildcards (`*` and `?`).
 
 ## Example
 

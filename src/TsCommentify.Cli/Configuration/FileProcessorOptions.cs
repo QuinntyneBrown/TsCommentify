@@ -7,10 +7,7 @@ public class FileProcessorOptions
     /// <summary>
     /// List of file patterns to ignore during processing.
     /// Supports wildcards like *.spec.ts and *.test.ts
+    /// Defaults to ["*.spec.ts", "*.test.ts"] if not configured.
     /// </summary>
-    public List<string> IgnorePatterns { get; set; } = new()
-    {
-        "*.spec.ts",
-        "*.test.ts"
-    };
+    public List<string> IgnorePatterns { get; set; } = new();
 }
