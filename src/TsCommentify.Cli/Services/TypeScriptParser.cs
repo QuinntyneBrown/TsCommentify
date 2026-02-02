@@ -52,14 +52,20 @@ public class TypeScriptParser : ITypeScriptParser
     private bool IsFunctionDeclaration(string line)
     {
         // Match various function declaration patterns:
-        // function name(...) 
+        // function name(...)
         // async function name(...)
         // const/let/var name = function(...)
         // const/let/var name = (...) =>
         // export function name(...)
         // [public/private/protected] [static] [async] name(...) {
         // get/set name(...) {
-        
+
+        // Skip control flow statements (if, switch, while, for, etc.)
+        if (IsControlFlowStatement(line))
+        {
+            return false;
+        }
+
         var patterns = new[]
         {
             @"^\s*(export\s+)?(async\s+)?function\s+\w+\s*\(",
@@ -67,16 +73,38 @@ public class TypeScriptParser : ITypeScriptParser
             @"^\s*(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s+)?\(.*?\)\s*:\s*\w+\s*=>",
             @"^\s*(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s+)?\(.*?\)\s*=>",
             // Class methods: [access] [static] [async] methodName
-            // With return types (including generic types like Promise<any>)
-            @"^\s*(?:(?:public|private|protected)\s+)?(?:static\s+)?(?:async\s+)?\w+\s*\([^)]*\)\s*:\s*[\w<>,\s]+\s*\{",
+            // With return types (including generic types like Promise<any> and arrays like string[])
+            @"^\s*(?:(?:public|private|protected)\s+)?(?:static\s+)?(?:async\s+)?\w+\s*\([^)]*\)\s*:\s*[\w<>,\s\[\]]+\s*\{",
             // Without return types
             @"^\s*(?:(?:public|private|protected)\s+)?(?:static\s+)?(?:async\s+)?\w+\s*\([^)]*\)\s*\{",
             // Getters and setters: [access] [static] get/set name
-            @"^\s*(?:(?:public|private|protected)\s+)?(?:static\s+)?(?:get|set)\s+\w+\s*\([^)]*\)\s*:\s*[\w<>,\s]+\s*\{",
+            @"^\s*(?:(?:public|private|protected)\s+)?(?:static\s+)?(?:get|set)\s+\w+\s*\([^)]*\)\s*:\s*[\w<>,\s\[\]]+\s*\{",
             @"^\s*(?:(?:public|private|protected)\s+)?(?:static\s+)?(?:get|set)\s+\w+\s*\([^)]*\)\s*\{"
         };
 
         return patterns.Any(pattern => Regex.IsMatch(line, pattern));
+    }
+
+    private bool IsControlFlowStatement(string line)
+    {
+        // Patterns for control flow statements that should not receive comments
+        var controlFlowPatterns = new[]
+        {
+            @"^\s*if\s*\(",           // if statements
+            @"^\s*else\s+if\s*\(",    // else if statements
+            @"^\s*else\s*\{",         // else blocks
+            @"^\s*switch\s*\(",       // switch statements
+            @"^\s*case\s+",           // case labels
+            @"^\s*default\s*:",       // default label
+            @"^\s*while\s*\(",        // while loops
+            @"^\s*for\s*\(",          // for loops
+            @"^\s*do\s*\{",           // do-while loops
+            @"^\s*try\s*\{",          // try blocks
+            @"^\s*catch\s*\(",        // catch blocks
+            @"^\s*finally\s*\{",      // finally blocks
+        };
+
+        return controlFlowPatterns.Any(pattern => Regex.IsMatch(line, pattern));
     }
 
     private bool HasCommentAbove(string[] lines, int lineIndex)
