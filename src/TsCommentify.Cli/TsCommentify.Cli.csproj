@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackAsTool>true</PackAsTool>
-    <ToolCommandName>tscommentify</ToolCommandName>
+    <ToolCommandName>tc</ToolCommandName>
     <PackageId>TsCommentify</PackageId>
     <Version>1.0.0</Version>
     <Authors>Quinntyne Brown</Authors>
