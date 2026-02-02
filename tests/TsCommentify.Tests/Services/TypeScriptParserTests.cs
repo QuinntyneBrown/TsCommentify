@@ -572,6 +572,26 @@ const arrow = (): void => {
         result[0].Name.Should().Be("loadData");
     }
 
+    [Fact]
+    public void ParseFunctions_WithNestedGenericReturnType_ParsesCorrectly()
+    {
+        // Arrange
+        var content = @"class DataService {
+  getData(): Promise<Array<string>> {
+    return Promise.resolve([]);
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Name.Should().Be("getData");
+        result[0].ReturnType.Should().Be("Promise<Array<string>>");
+    }
+
     private string CreateTestFile(string content)
     {
         var filePath = Path.Combine(_testDirectory, $"test_{Guid.NewGuid()}.ts");
