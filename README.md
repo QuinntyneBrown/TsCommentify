@@ -37,13 +37,13 @@ dotnet tool install --global --add-source ./src/TsCommentify.Cli/bin/Debug TsCom
 ### Process a single TypeScript file
 
 ```bash
-tscommentify path/to/file.ts
+tc path/to/file.ts
 ```
 
 ### Process an entire directory
 
 ```bash
-tscommentify path/to/project
+tc path/to/project
 ```
 
 The tool will recursively scan all `.ts` and `.tsx` files in the directory and add comments to functions that don't have them.
