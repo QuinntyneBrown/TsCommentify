@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using TsCommentify.Cli.Services;
@@ -10,6 +11,7 @@ public class FileProcessorTests : IDisposable
     private readonly Mock<ITypeScriptParser> _parserMock;
     private readonly Mock<ICommentGenerator> _generatorMock;
     private readonly Mock<ILogger<FileProcessor>> _loggerMock;
+    private readonly Mock<IConfiguration> _configurationMock;
     private readonly FileProcessor _processor;
     private readonly string _testDirectory;
 
@@ -18,7 +20,14 @@ public class FileProcessorTests : IDisposable
         _parserMock = new Mock<ITypeScriptParser>();
         _generatorMock = new Mock<ICommentGenerator>();
         _loggerMock = new Mock<ILogger<FileProcessor>>();
-        _processor = new FileProcessor(_parserMock.Object, _generatorMock.Object, _loggerMock.Object);
+        _configurationMock = new Mock<IConfiguration>();
+        
+        // Setup default configuration
+        var configSection = new Mock<IConfigurationSection>();
+        configSection.Setup(x => x.GetChildren()).Returns(new List<IConfigurationSection>());
+        _configurationMock.Setup(x => x.GetSection(It.IsAny<string>())).Returns(configSection.Object);
+        
+        _processor = new FileProcessor(_parserMock.Object, _generatorMock.Object, _loggerMock.Object, _configurationMock.Object);
         _testDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(_testDirectory);
     }
