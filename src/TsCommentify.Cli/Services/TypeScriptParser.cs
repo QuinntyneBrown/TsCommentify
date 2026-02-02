@@ -57,7 +57,9 @@ public class TypeScriptParser : ITypeScriptParser
         // const/let/var name = function(...)
         // const/let/var name = (...) =>
         // export function name(...)
-        // public/private/protected name(...) {
+        // public/private/protected/static name(...) {
+        // async name(...) {
+        // get/set name(...) {
         
         var patterns = new[]
         {
@@ -65,8 +67,14 @@ public class TypeScriptParser : ITypeScriptParser
             @"^\s*(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s+)?function\s*\(",
             @"^\s*(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s+)?\(.*?\)\s*:\s*\w+\s*=>",
             @"^\s*(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s+)?\(.*?\)\s*=>",
-            @"^\s*(public|private|protected|static)?\s*\w+\s*\([^)]*\)\s*:\s*\w+\s*\{",
-            @"^\s*(public|private|protected|static)?\s*\w+\s*\([^)]*\)\s*\{"
+            // Class methods with access modifiers and return types (including generic types)
+            @"^\s*(?:public|private|protected|static|async)?\s*(?:public|private|protected|static|async)?\s*\w+\s*\([^)]*\)\s*:\s*[\w<>,\s]+\s*\{",
+            // Class methods with access modifiers without return types
+            @"^\s*(?:public|private|protected|static|async)?\s*(?:public|private|protected|static|async)?\s*\w+\s*\([^)]*\)\s*\{",
+            // Getters and setters with return types
+            @"^\s*(?:public|private|protected|static)?\s*(?:get|set)\s+\w+\s*\([^)]*\)\s*:\s*[\w<>,\s]+\s*\{",
+            // Getters and setters without return types
+            @"^\s*(?:public|private|protected|static)?\s*(?:get|set)\s+\w+\s*\([^)]*\)\s*\{"
         };
 
         return patterns.Any(pattern => Regex.IsMatch(line, pattern));
@@ -126,6 +134,18 @@ public class TypeScriptParser : ITypeScriptParser
         {
             // Try regular function declaration
             nameMatch = Regex.Match(line, @"function\s+(\w+)\s*\(");
+        }
+
+        if (!nameMatch.Success)
+        {
+            // Try class method pattern (with or without access modifiers)
+            nameMatch = Regex.Match(line, @"^\s*(?:public|private|protected|static|async)?\s*(?:public|private|protected|static|async)?\s*(\w+)\s*\(");
+        }
+
+        if (!nameMatch.Success)
+        {
+            // Try getter/setter pattern
+            nameMatch = Regex.Match(line, @"^\s*(?:public|private|protected|static)?\s*(?:get|set)\s+(\w+)\s*\(");
         }
 
         if (!nameMatch.Success)
@@ -220,10 +240,11 @@ public class TypeScriptParser : ITypeScriptParser
     private string? ParseReturnType(string line)
     {
         // Match return type annotation ): type or => type
-        var match = Regex.Match(line, @"\):\s*(\w+(?:<[^>]+>)?)\s*(?:\{|=>|;)");
+        // This handles generic types like Promise<any>, Array<string>, etc.
+        var match = Regex.Match(line, @"\):\s*([\w<>,\[\]\s]+?)\s*(?:\{|=>)");
         if (match.Success)
         {
-            return match.Groups[1].Value;
+            return match.Groups[1].Value.Trim();
         }
 
         // Check for implicit return from arrow function

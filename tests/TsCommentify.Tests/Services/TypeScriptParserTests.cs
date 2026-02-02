@@ -257,6 +257,321 @@ const multiply = (a: number, b: number): number => a * b;";
         result[0].Parameters.Should().HaveCount(2);
     }
 
+    [Fact]
+    public void ParseFunctions_WithClassMethod_ParsesCorrectly()
+    {
+        // Arrange
+        var content = @"class Calculator {
+  add(a: number, b: number): number {
+    return a + b;
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Name.Should().Be("add");
+        result[0].Parameters.Should().HaveCount(2);
+        result[0].Parameters[0].Name.Should().Be("a");
+        result[0].Parameters[0].Type.Should().Be("number");
+        result[0].ReturnType.Should().Be("number");
+        result[0].HasComment.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithPrivateClassMethod_ParsesCorrectly()
+    {
+        // Arrange
+        var content = @"class Service {
+  private processData(data: string): void {
+    console.log(data);
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Name.Should().Be("processData");
+        result[0].Parameters.Should().HaveCount(1);
+        result[0].Parameters[0].Name.Should().Be("data");
+        result[0].ReturnType.Should().Be("void");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithPublicClassMethod_ParsesCorrectly()
+    {
+        // Arrange
+        var content = @"class UserService {
+  public getUser(id: string): User {
+    return users[id];
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Name.Should().Be("getUser");
+        result[0].Parameters.Should().HaveCount(1);
+        result[0].ReturnType.Should().Be("User");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithProtectedClassMethod_ParsesCorrectly()
+    {
+        // Arrange
+        var content = @"class BaseClass {
+  protected validate(input: string): boolean {
+    return input.length > 0;
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Name.Should().Be("validate");
+        result[0].Parameters.Should().HaveCount(1);
+        result[0].ReturnType.Should().Be("boolean");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithStaticClassMethod_ParsesCorrectly()
+    {
+        // Arrange
+        var content = @"class MathUtils {
+  static calculateSum(numbers: number[]): number {
+    return numbers.reduce((a, b) => a + b, 0);
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Name.Should().Be("calculateSum");
+        result[0].Parameters.Should().HaveCount(1);
+        result[0].ReturnType.Should().Be("number");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithAsyncClassMethod_ParsesCorrectly()
+    {
+        // Arrange
+        var content = @"class ApiService {
+  async fetchData(url: string): Promise<any> {
+    return await fetch(url);
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Name.Should().Be("fetchData");
+        result[0].Parameters.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void ParseFunctions_WithMultipleClassMethods_ParsesAll()
+    {
+        // Arrange
+        var content = @"class Calculator {
+  add(a: number, b: number): number {
+    return a + b;
+  }
+
+  private subtract(a: number, b: number): number {
+    return a - b;
+  }
+
+  public multiply(a: number, b: number): number {
+    return a * b;
+  }
+
+  protected divide(a: number, b: number): number {
+    return a / b;
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(4);
+        result[0].Name.Should().Be("add");
+        result[1].Name.Should().Be("subtract");
+        result[2].Name.Should().Be("multiply");
+        result[3].Name.Should().Be("divide");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithClassMethodWithComment_DetectsComment()
+    {
+        // Arrange
+        var content = @"class Service {
+  /**
+   * Process the data
+   */
+  processData(data: string): void {
+    console.log(data);
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].HasComment.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithGetter_ParsesCorrectly()
+    {
+        // Arrange
+        var content = @"class Person {
+  get name(): string {
+    return this._name;
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Name.Should().Be("name");
+        result[0].ReturnType.Should().Be("string");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithSetter_ParsesCorrectly()
+    {
+        // Arrange
+        var content = @"class Person {
+  set name(value: string) {
+    this._name = value;
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Name.Should().Be("name");
+        result[0].Parameters.Should().HaveCount(1);
+        result[0].Parameters[0].Name.Should().Be("value");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithClassAndStandaloneFunctions_ParsesAll()
+    {
+        // Arrange
+        var content = @"function standalone(): void {
+  console.log('standalone');
+}
+
+class MyClass {
+  method(): void {
+    console.log('method');
+  }
+}
+
+const arrow = (): void => {
+  console.log('arrow');
+};";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(3);
+        result[0].Name.Should().Be("standalone");
+        result[1].Name.Should().Be("method");
+        result[2].Name.Should().Be("arrow");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithClassMethodWithoutReturnType_ParsesCorrectly()
+    {
+        // Arrange
+        var content = @"class Logger {
+  log(message: string) {
+    console.log(message);
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Name.Should().Be("log");
+        result[0].Parameters.Should().HaveCount(1);
+        result[0].ReturnType.Should().BeNull();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithPublicStaticMethod_ParsesCorrectly()
+    {
+        // Arrange
+        var content = @"class Utils {
+  public static formatDate(date: Date): string {
+    return date.toISOString();
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Name.Should().Be("formatDate");
+        result[0].ReturnType.Should().Be("string");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithPrivateAsyncMethod_ParsesCorrectly()
+    {
+        // Arrange
+        var content = @"class DataService {
+  private async loadData(): Promise<void> {
+    await fetch('/api/data');
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Name.Should().Be("loadData");
+    }
+
     private string CreateTestFile(string content)
     {
         var filePath = Path.Combine(_testDirectory, $"test_{Guid.NewGuid()}.ts");
