@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using TsCommentify.Cli.Configuration;
 
 namespace TsCommentify.Cli.Services;
 
@@ -7,15 +9,19 @@ public class FileProcessor : IFileProcessor
     private readonly ITypeScriptParser _parser;
     private readonly ICommentGenerator _commentGenerator;
     private readonly ILogger<FileProcessor> _logger;
+    private readonly FileProcessorOptions _options;
 
     public FileProcessor(
         ITypeScriptParser parser,
         ICommentGenerator commentGenerator,
-        ILogger<FileProcessor> logger)
+        ILogger<FileProcessor> logger,
+        IConfiguration configuration)
     {
         _parser = parser;
         _commentGenerator = commentGenerator;
         _logger = logger;
+        _options = configuration.GetSection(FileProcessorOptions.SectionName).Get<FileProcessorOptions>() 
+            ?? new FileProcessorOptions();
     }
 
     public async Task ProcessFileAsync(string filePath)
@@ -64,6 +70,7 @@ public class FileProcessor : IFileProcessor
         var tsFiles = Directory.GetFiles(directoryPath, "*.ts", SearchOption.AllDirectories)
             .Concat(Directory.GetFiles(directoryPath, "*.tsx", SearchOption.AllDirectories))
             .Where(f => !f.Contains("node_modules") && !f.Contains("dist") && !f.Contains(".d.ts"))
+            .Where(f => !ShouldIgnoreFile(f))
             .ToList();
 
         _logger.LogInformation("Found {Count} TypeScript files to process", tsFiles.Count);
@@ -80,6 +87,33 @@ public class FileProcessor : IFileProcessor
     {
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
         return extension == ".ts" || extension == ".tsx";
+    }
+
+    private bool ShouldIgnoreFile(string filePath)
+    {
+        var fileName = Path.GetFileName(filePath);
+        
+        foreach (var pattern in _options.IgnorePatterns)
+        {
+            if (MatchesPattern(fileName, pattern))
+            {
+                _logger.LogDebug("Ignoring file {FilePath} due to pattern {Pattern}", filePath, pattern);
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    private bool MatchesPattern(string fileName, string pattern)
+    {
+        // Convert wildcard pattern to regex
+        var regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(pattern)
+            .Replace("\\*", ".*")
+            .Replace("\\?", ".") + "$";
+        
+        return System.Text.RegularExpressions.Regex.IsMatch(fileName, regexPattern, 
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     }
 
     private async Task AddCommentsToFileAsync(string filePath, List<FunctionInfo> functions)
