@@ -592,6 +592,478 @@ const arrow = (): void => {
         result[0].ReturnType.Should().Be("Promise<Array<string>>");
     }
 
+    [Fact]
+    public void ParseFunctions_WithInterface_ParsesInterfaceDeclaration()
+    {
+        // Arrange
+        var content = @"interface User {
+  id: string;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "User" && f.LineNumber == 1 && !f.HasComment);
+    }
+
+    [Fact]
+    public void ParseFunctions_WithExportedInterface_ParsesInterfaceDeclaration()
+    {
+        // Arrange
+        var content = @"export interface Product {
+  name: string;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "Product" && f.LineNumber == 1);
+    }
+
+    [Fact]
+    public void ParseFunctions_WithInterfaceProperties_ParsesEachProperty()
+    {
+        // Arrange
+        var content = @"interface User {
+  id: string;
+  age: number;
+  isActive?: boolean;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "id" && f.LineNumber == 2);
+        result.Should().Contain(f => f.Name == "age" && f.LineNumber == 3);
+        result.Should().Contain(f => f.Name == "isActive" && f.LineNumber == 4);
+    }
+
+    [Fact]
+    public void ParseFunctions_WithInterfaceMethodSignature_ParsesParametersAndReturnType()
+    {
+        // Arrange
+        var content = @"interface Repository {
+  findById(id: string): User;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        var method = result.Single(f => f.Name == "findById");
+        method.Parameters.Should().HaveCount(1);
+        method.Parameters[0].Name.Should().Be("id");
+        method.Parameters[0].Type.Should().Be("string");
+        method.ReturnType.Should().Be("User");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithInterfaceMethodWithoutReturnType_ParsesCorrectly()
+    {
+        // Arrange
+        var content = @"interface Logger {
+  log(message: string);
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        var method = result.Single(f => f.Name == "log");
+        method.Parameters.Should().HaveCount(1);
+        method.ReturnType.Should().BeNull();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithReadonlyProperty_ParsesName()
+    {
+        // Arrange
+        var content = @"interface Config {
+  readonly apiUrl: string;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "apiUrl");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithCommentedInterface_DetectsComment()
+    {
+        // Arrange
+        var content = @"/**
+ * The user contract.
+ */
+interface User {
+  id: string;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Single(f => f.Name == "User").HasComment.Should().BeTrue();
+        // The property still needs a comment.
+        result.Single(f => f.Name == "id").HasComment.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithCommentedInterfaceMember_DetectsComment()
+    {
+        // Arrange
+        var content = @"interface User {
+  /** The unique identifier. */
+  id: string;
+  name: string;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Single(f => f.Name == "id").HasComment.Should().BeTrue();
+        result.Single(f => f.Name == "name").HasComment.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithNestedObjectProperty_DoesNotParseNestedMembersAsTopLevel()
+    {
+        // Arrange
+        var content = @"interface Settings {
+  options: {
+    timeout: number;
+    retries: number;
+  };
+  enabled: boolean;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "options");
+        result.Should().Contain(f => f.Name == "enabled");
+        // Nested object members are not treated as interface members.
+        result.Should().NotContain(f => f.Name == "timeout");
+        result.Should().NotContain(f => f.Name == "retries");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithIndexSignature_SkipsIt()
+    {
+        // Arrange
+        var content = @"interface Dictionary {
+  [key: string]: number;
+  size: number;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "size");
+        result.Should().NotContain(f => f.Name == "key");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithMultipleInterfaces_ParsesAll()
+    {
+        // Arrange
+        var content = @"interface First {
+  a: string;
+}
+
+interface Second {
+  b: number;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "First");
+        result.Should().Contain(f => f.Name == "Second");
+        result.Should().Contain(f => f.Name == "a");
+        result.Should().Contain(f => f.Name == "b");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithInterfaceAndFunction_ParsesBoth()
+    {
+        // Arrange
+        var content = @"interface Greeter {
+  greeting: string;
+}
+
+function greet(name: string): string {
+  return name;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "Greeter");
+        result.Should().Contain(f => f.Name == "greeting");
+        result.Should().Contain(f => f.Name == "greet" && f.ReturnType == "string");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithInterfaceExtends_ParsesInterfaceName()
+    {
+        // Arrange
+        var content = @"export interface Admin extends User {
+  permissions: string[];
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "Admin");
+        result.Should().Contain(f => f.Name == "permissions");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithMultiLineMethodSignature_ParsesSingleMemberWithoutPhantoms()
+    {
+        // Arrange
+        var content = @"interface Repository {
+  save(
+    entity: User,
+    options: SaveOptions
+  ): Promise<void>;
+  id: string;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        var save = result.Single(f => f.Name == "save");
+        save.Parameters.Should().HaveCount(2);
+        save.Parameters[0].Name.Should().Be("entity");
+        save.Parameters[1].Name.Should().Be("options");
+        save.ReturnType.Should().Be("Promise<void>");
+        // Wrapped parameter lines must NOT be emitted as phantom interface members.
+        result.Should().NotContain(f => f.Name == "entity");
+        result.Should().NotContain(f => f.Name == "options");
+        result.Should().Contain(f => f.Name == "id");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithMultiLineFunctionTypedProperty_DoesNotEmitPhantomParameters()
+    {
+        // Arrange
+        var content = @"interface Form {
+  submit: (
+    data: FormData
+  ) => Promise<void>;
+  label: string;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "submit");
+        result.Should().Contain(f => f.Name == "label");
+        result.Should().NotContain(f => f.Name == "data");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithBraceInStringLiteralType_DoesNotDropFollowingMembers()
+    {
+        // Arrange
+        var content = @"interface Closer {
+  symbol: ""}"";
+  missedOne: number;
+  missedTwo: number;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "symbol");
+        result.Should().Contain(f => f.Name == "missedOne");
+        result.Should().Contain(f => f.Name == "missedTwo");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithBraceInStringLiteral_DoesNotLeakIntoNextInterface()
+    {
+        // Arrange
+        var content = @"interface First {
+  opener: ""{"";
+  alpha: number;
+}
+
+interface Second {
+  beta: number;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "First");
+        result.Should().Contain(f => f.Name == "alpha");
+        result.Should().Contain(f => f.Name == "Second");
+        result.Should().Contain(f => f.Name == "beta");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithTrailingInlineBlockComment_DoesNotSuppressNextMember()
+    {
+        // Arrange
+        var content = @"interface User {
+  a: string; /* note */
+  b: number;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert: a trailing inline /* */ comment must not be mistaken for a doc
+        // comment on the following member.
+        result.Single(f => f.Name == "b").HasComment.Should().BeFalse();
+        result.Should().Contain(f => f.Name == "a");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithStarSlashInStringLiteral_DoesNotSuppressNextMember()
+    {
+        // Arrange
+        var content = @"interface Parser {
+  closeComment: ""*/"";
+  shouldBeCommented: number;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "closeComment");
+        result.Single(f => f.Name == "shouldBeCommented").HasComment.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithTrailingInlineCommentAboveFunction_StillDocumentsFunction()
+    {
+        // Arrange
+        var content = @"const sep = ""*/"";
+function realFunction(x: number): number {
+  return x;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Single(f => f.Name == "realFunction").HasComment.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithInlineFirstMember_StillParsesRemainingMembers()
+    {
+        // Arrange: the first member shares the declaration line; subsequent members
+        // on their own lines must still be parsed correctly (no corruption).
+        var content = @"interface A { id: string;
+  name: string;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "A");
+        result.Should().Contain(f => f.Name == "name");
+        // 'id' shares the declaration line, so it cannot receive a line-based
+        // comment and is intentionally not emitted as a documentable member.
+        result.Should().NotContain(f => f.Name == "id");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithGenericDefaultObjectType_ParsesMembers()
+    {
+        // Arrange: the `{}` lives in the generic parameter list, not the body.
+        var content = @"interface State<T = {}> {
+  current: T;
+  set(next: T): void;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "State");
+        result.Should().Contain(f => f.Name == "current");
+        result.Should().Contain(f => f.Name == "set");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithGenericConstraintObjectType_ParsesMembers()
+    {
+        // Arrange
+        var content = @"interface Repo<T extends { id: number }> {
+  add(item: T): void;
+  count: number;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "Repo");
+        result.Should().Contain(f => f.Name == "add");
+        result.Should().Contain(f => f.Name == "count");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithLoneCarriageReturnEndings_DoesNotThrow()
+    {
+        // Arrange: classic-Mac style lone-CR separators. ParseFunctions and the
+        // file writer must agree on line splitting; this must not throw.
+        var content = "interface Foo {\r  id: string;\r}\r";
+        var filePath = Path.Combine(_testDirectory, $"cr_{Guid.NewGuid()}.ts");
+        File.WriteAllText(filePath, content);
+
+        // Act
+        Action act = () => _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        act.Should().NotThrow();
+    }
+
     private string CreateTestFile(string content)
     {
         var filePath = Path.Combine(_testDirectory, $"test_{Guid.NewGuid()}.ts");

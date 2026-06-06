@@ -1,18 +1,20 @@
 # TsCommentify
 
-A CLI tool that automatically adds JSDoc comments to TypeScript functions using best practices.
+A CLI tool that automatically adds JSDoc comments to TypeScript functions and interfaces using best practices.
 
 ## Features
 
-- **Automatic Comment Generation**: Automatically generates JSDoc-style comments for TypeScript functions
+- **Automatic Comment Generation**: Automatically generates JSDoc-style comments for TypeScript functions and interfaces
 - **Smart Parsing**: Supports multiple function declaration styles:
   - Regular functions (`function name() {}`)
   - Arrow functions (`const name = () => {}`)
   - Function expressions (`const name = function() {}`)
   - Async functions (`async function name() {}`)
   - Exported functions (`export function name() {}`)
+  - Class methods, getters, and setters
+- **Interface Support**: Documents interface declarations along with their property and method signatures (e.g. `*.contract.ts` files)
 - **Type-Aware**: Recognizes TypeScript type annotations for parameters and return types
-- **Comment Detection**: Skips functions that already have comments
+- **Comment Detection**: Skips functions, interfaces, and members that already have comments
 - **Batch Processing**: Process single files or entire directories recursively
 - **Smart Filtering**: Automatically excludes `node_modules`, `dist`, `.d.ts` files, and test files (`*.spec.ts`, `*.test.ts`)
 - **Configurable Ignore Patterns**: Customize which files to ignore via `appsettings.json`
@@ -103,6 +105,39 @@ function calculateTotal(price: number, quantity: number): number {
 const processData = (data: string[]) => {
   return data.map(item => item.toUpperCase());
 };
+```
+
+### Interfaces
+
+Running `tc foo.contract.ts` documents interfaces and their members.
+
+#### Before
+
+```typescript
+export interface Foo {
+  id: string;
+  getDisplayName(): string;
+}
+```
+
+#### After
+
+```typescript
+/**
+ * Foo.
+ */
+export interface Foo {
+  /**
+   * Id.
+   */
+  id: string;
+  /**
+   * Get Display Name.
+   *
+   * @returns {string} The result of the operation
+   */
+  getDisplayName(): string;
+}
 ```
 
 ## Best Practices

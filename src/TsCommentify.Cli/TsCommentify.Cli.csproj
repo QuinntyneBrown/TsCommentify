@@ -8,10 +8,15 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>tc</ToolCommandName>
     <PackageId>TsCommentify</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.2.0</Version>
     <Authors>Quinntyne Brown</Authors>
-    <Description>A CLI tool that updates TypeScript files with missing function comments using best practices.</Description>
-    <PackageTags>typescript;comments;documentation;cli</PackageTags>
+    <Description>A CLI tool that automatically generates JSDoc comments for TypeScript functions, methods, getters, setters, and interfaces (including their property and method signatures). Supports configurable ignore patterns for test files.</Description>
+    <PackageTags>typescript;comments;documentation;cli;jsdoc;code-generator;interfaces</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/QuinntyneBrown/TsCommentify</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/QuinntyneBrown/TsCommentify</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,6 +33,7 @@
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

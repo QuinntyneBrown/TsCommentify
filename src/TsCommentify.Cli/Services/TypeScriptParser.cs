@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
@@ -22,7 +23,16 @@ public class TypeScriptParser : ITypeScriptParser
             return Enumerable.Empty<FunctionInfo>();
         }
 
-        var lines = File.ReadAllLines(filePath);
+        // Split only on '\n' (stripping a trailing '\r'). This MUST match how
+        // FileProcessor.AddCommentsToFileAsync splits the file, otherwise the line
+        // numbers produced here would not line up with the lines it edits (a lone
+        // '\r', which File.ReadAllLines treats as a separator, would desync them).
+        var lines = File.ReadAllText(filePath).Split('\n');
+        for (int k = 0; k < lines.Length; k++)
+        {
+            lines[k] = lines[k].TrimEnd('\r');
+        }
+
         var functions = new List<FunctionInfo>();
 
         for (int i = 0; i < lines.Length; i++)
@@ -32,6 +42,15 @@ public class TypeScriptParser : ITypeScriptParser
             // Skip empty lines and single-line comments
             if (string.IsNullOrWhiteSpace(line) || line.StartsWith("//"))
                 continue;
+
+            // Check for interface declarations. An interface and its members are
+            // parsed as a block so the body is not re-evaluated as functions; the
+            // loop resumes after the interface's closing brace.
+            if (IsInterfaceDeclaration(line))
+            {
+                i = ParseInterface(lines, i, functions);
+                continue;
+            }
 
             // Check for function declarations
             if (IsFunctionDeclaration(line))
@@ -107,41 +126,248 @@ public class TypeScriptParser : ITypeScriptParser
         return controlFlowPatterns.Any(pattern => Regex.IsMatch(line, pattern));
     }
 
+    private bool IsInterfaceDeclaration(string line)
+    {
+        // Match: [export] [declare] interface Name [<...>] [extends ...] {
+        return Regex.IsMatch(line, @"^\s*(export\s+)?(declare\s+)?interface\s+\w+");
+    }
+
+    // Parses an interface declaration and its members, adding a FunctionInfo for
+    // the interface itself and for each property/method signature in its body.
+    // Returns the index of the interface's closing brace so the caller can skip
+    // over the already-processed block.
+    //
+    // The body is walked character-by-character (aware of strings, template/char
+    // literals and comments) so that:
+    //   - braces/parentheses inside string literals or comments do not corrupt
+    //     depth tracking,
+    //   - multi-line member signatures are accumulated into a single logical
+    //     declaration before being classified (no phantom per-parameter members),
+    //   - only members that begin their own physical line are documented, since
+    //     comments are inserted on the line above the member.
+    private int ParseInterface(string[] lines, int startIndex, List<FunctionInfo> results)
+    {
+        var declLine = lines[startIndex];
+        var nameMatch = Regex.Match(declLine, @"interface\s+(\w+)");
+        if (nameMatch.Success)
+        {
+            results.Add(new FunctionInfo(
+                Name: nameMatch.Groups[1].Value,
+                LineNumber: startIndex + 1,
+                Content: declLine,
+                Parameters: new List<ParameterInfo>(),
+                ReturnType: null,
+                HasComment: HasCommentAbove(lines, startIndex)));
+        }
+
+        var braceDepth = 0;
+        var parenDepth = 0;
+        var angleDepth = 0;
+        var inBlockComment = false;
+        var stringDelim = '\0';
+
+        var memberBuf = new StringBuilder();
+        var memberStartLine = -1;
+        var memberStartsLine = false;
+
+        void Append(char c)
+        {
+            if (char.IsWhiteSpace(c))
+            {
+                if (memberBuf.Length > 0 && memberBuf[memberBuf.Length - 1] != ' ')
+                    memberBuf.Append(' ');
+            }
+            else
+            {
+                memberBuf.Append(c);
+            }
+        }
+
+        void Flush()
+        {
+            if (memberStartLine >= 0 && memberStartsLine)
+            {
+                var text = memberBuf.ToString().Trim();
+                if (text.Length > 0)
+                {
+                    var hasComment = HasCommentAbove(lines, memberStartLine);
+                    var member = ParseInterfaceMember(text, memberStartLine, hasComment);
+                    if (member != null)
+                        results.Add(member);
+                }
+            }
+
+            memberBuf.Clear();
+            memberStartLine = -1;
+            memberStartsLine = false;
+            parenDepth = 0;
+        }
+
+        for (int li = startIndex; li < lines.Length; li++)
+        {
+            var line = lines[li];
+
+            for (int ci = 0; ci < line.Length; ci++)
+            {
+                var c = line[ci];
+                var next = ci + 1 < line.Length ? line[ci + 1] : '\0';
+
+                if (inBlockComment)
+                {
+                    if (c == '*' && next == '/') { inBlockComment = false; ci++; }
+                    continue;
+                }
+
+                if (stringDelim != '\0')
+                {
+                    if (memberStartLine >= 0) memberBuf.Append(c);
+                    if (c == '\\' && next != '\0')
+                    {
+                        memberBuf.Append(next);
+                        ci++;
+                    }
+                    else if (c == stringDelim)
+                    {
+                        stringDelim = '\0';
+                    }
+                    continue;
+                }
+
+                if (c == '/' && next == '/') break;            // line comment: ignore rest
+                if (c == '/' && next == '*') { inBlockComment = true; ci++; continue; }
+
+                if (c == '"' || c == '\'' || c == '`')
+                {
+                    stringDelim = c;
+                    if (memberStartLine >= 0) memberBuf.Append(c);
+                    continue;
+                }
+
+                // Before the body opens, track the declaration's generic parameter
+                // list (<...>) so that braces inside it (e.g. `interface S<T = {}>`)
+                // are not mistaken for the interface body.
+                if (braceDepth == 0)
+                {
+                    if (c == '<') { angleDepth++; continue; }
+                    if (c == '>' && angleDepth > 0) { angleDepth--; continue; }
+                    if (angleDepth > 0 && (c == '{' || c == '}')) continue; // inside generics
+                }
+
+                if (c == '{')
+                {
+                    braceDepth++;
+                    if (braceDepth == 1) continue;                          // interface body opens
+                    if (memberStartLine >= 0) Append(c);                    // nested object type
+                    continue;
+                }
+
+                if (c == '}')
+                {
+                    braceDepth--;
+                    if (braceDepth == 0) { Flush(); return li; }            // interface body closes
+                    if (memberStartLine >= 0) Append(c);                    // nested object type
+                    continue;
+                }
+
+                if (braceDepth != 1)
+                {
+                    // Inside a nested object type (depth >= 2): keep as member text.
+                    if (c == '(') parenDepth++;
+                    else if (c == ')') parenDepth--;
+                    if (memberStartLine >= 0) Append(c);
+                    continue;
+                }
+
+                // Directly in the interface body.
+                if (c == ';' && parenDepth == 0) { Flush(); continue; }
+
+                if (c == '(') parenDepth++;
+                else if (c == ')') parenDepth--;
+
+                if (memberStartLine < 0)
+                {
+                    if (char.IsWhiteSpace(c)) continue;
+                    memberStartLine = li;
+                    // Only document members that are the first content on their line;
+                    // a member sharing a line (with the opening brace or another
+                    // member) cannot receive a comment via line-based insertion.
+                    memberStartsLine = line.Substring(0, ci).Trim().Length == 0;
+                }
+
+                Append(c);
+            }
+
+            // Separate tokens across physical line breaks while a member is open.
+            if (memberStartLine >= 0) Append(' ');
+        }
+
+        Flush();
+        return lines.Length - 1;
+    }
+
+    private FunctionInfo? ParseInterfaceMember(string memberText, int startLineIndex, bool hasComment)
+    {
+        // Skip index signatures ([key: string]: T) and call/construct signatures
+        // ((...) and new (...)) which have no meaningful member name.
+        if (memberText.StartsWith("[") || memberText.StartsWith("(") || memberText.StartsWith("new "))
+        {
+            return null;
+        }
+
+        // Method signature: name[?]<generics>(params)[: returnType]
+        var methodMatch = Regex.Match(memberText, @"^(?:readonly\s+)?(\w+)\??\s*(?:<[^>]*>)?\s*\(");
+        if (methodMatch.Success)
+        {
+            return new FunctionInfo(
+                Name: methodMatch.Groups[1].Value,
+                LineNumber: startLineIndex + 1,
+                Content: memberText,
+                Parameters: ParseParameters(memberText),
+                ReturnType: ParseInterfaceMemberReturnType(memberText),
+                HasComment: hasComment);
+        }
+
+        // Property signature: name[?]: type
+        var propertyMatch = Regex.Match(memberText, @"^(?:readonly\s+)?(\w+)\??\s*:");
+        if (propertyMatch.Success)
+        {
+            return new FunctionInfo(
+                Name: propertyMatch.Groups[1].Value,
+                LineNumber: startLineIndex + 1,
+                Content: memberText,
+                Parameters: new List<ParameterInfo>(),
+                ReturnType: null,
+                HasComment: hasComment);
+        }
+
+        return null;
+    }
+
+    private string? ParseInterfaceMemberReturnType(string memberText)
+    {
+        // Interface method signatures have no '{' body, so the return type is the
+        // text after the parameter list's '):' up to the (already stripped) ';'.
+        var match = Regex.Match(memberText, @"\)\s*:\s*(.+?)\s*;?\s*$");
+        return match.Success ? match.Groups[1].Value.Trim() : null;
+    }
+
     private bool HasCommentAbove(string[] lines, int lineIndex)
     {
-        if (lineIndex == 0) return false;
-
-        // Check the line immediately above
-        var previousLine = lines[lineIndex - 1].TrimStart();
-        
-        // Check for JSDoc style comment (/** ... */)
-        if (previousLine.StartsWith("*/") || previousLine.Contains("*/"))
-        {
-            return true;
-        }
-
-        // Check for single-line comment starting with /// or //
-        if (previousLine.StartsWith("///") || previousLine.StartsWith("//"))
-        {
-            return true;
-        }
-
-        // Look backwards for JSDoc comment block
+        // Inspect the closest non-blank line above the declaration. It indicates an
+        // existing doc comment only when it is genuinely a comment line: a line
+        // comment (//), or part of a block comment (opens with /* or /**, or
+        // continues/closes with * or */). A code line that merely contains '*/' or
+        // '/**' inside a string literal or as a trailing inline comment is NOT a
+        // doc comment for this declaration and must not suppress documentation.
         for (int i = lineIndex - 1; i >= 0; i--)
         {
-            var line = lines[i].TrimStart();
-            if (string.IsNullOrWhiteSpace(line))
+            var line = lines[i].Trim();
+            if (line.Length == 0)
                 continue;
-                
-            if (line.StartsWith("/**") || line.Contains("/**"))
-                return true;
-                
-            if (line.StartsWith("*/"))
-                return true;
-                
-            // If we hit code, stop looking
-            if (!line.StartsWith("*") && !line.StartsWith("//"))
-                break;
+
+            return line.StartsWith("//")
+                || line.StartsWith("/*")
+                || line.StartsWith("*");
         }
 
         return false;

@@ -125,26 +125,36 @@ public class FileProcessor : IFileProcessor
 
     private async Task AddCommentsToFileAsync(string filePath, List<FunctionInfo> functions)
     {
-        var lines = await File.ReadAllLinesAsync(filePath);
-        var newLines = new List<string>();
+        var text = await File.ReadAllTextAsync(filePath);
+
+        // Preserve the file's existing line-ending style and trailing-newline state
+        // so adding a comment produces a minimal diff rather than re-encoding the
+        // whole file (e.g. LF -> CRLF on Windows).
+        var newline = text.Contains("\r\n") ? "\r\n" : "\n";
+        var hadTrailingNewline = text.EndsWith("\n");
+
+        var currentLines = text.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+        if (hadTrailingNewline && currentLines.Count > 0)
+        {
+            // Drop the empty element produced by the final newline.
+            currentLines.RemoveAt(currentLines.Count - 1);
+        }
 
         // Sort functions by line number in descending order to avoid index shifting
         var sortedFunctions = functions.OrderByDescending(f => f.LineNumber).ToList();
-
-        var currentLines = lines.ToList();
 
         foreach (var function in sortedFunctions)
         {
             var comment = _commentGenerator.GenerateComment(function);
             var commentLines = comment.Split('\n', StringSplitOptions.None);
-            
+
             // Insert comment before the function (line numbers are 1-based)
             var insertIndex = function.LineNumber - 1;
-            
+
             // Preserve indentation of the function
             var functionLine = currentLines[insertIndex];
             var indent = GetIndentation(functionLine);
-            
+
             // Insert comment lines with proper indentation
             for (int i = commentLines.Length - 1; i >= 0; i--)
             {
@@ -153,7 +163,8 @@ public class FileProcessor : IFileProcessor
             }
         }
 
-        await File.WriteAllLinesAsync(filePath, currentLines);
+        var result = string.Join(newline, currentLines) + (hadTrailingNewline ? newline : string.Empty);
+        await File.WriteAllTextAsync(filePath, result);
     }
 
     private string GetIndentation(string line)

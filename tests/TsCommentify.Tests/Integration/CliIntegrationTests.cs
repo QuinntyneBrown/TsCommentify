@@ -71,6 +71,113 @@ public class CliIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task Cli_WithContractFileContainingInterface_AddsComments()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDirectory, "foo.contract.ts");
+        var content = @"export interface Foo {
+  id: string;
+  getName(): string;
+}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath);
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("/**");
+        result.Should().Contain("Foo.");
+        result.Should().Contain("Id.");
+        result.Should().Contain("Get Name.");
+        result.Should().Contain("export interface Foo");
+    }
+
+    [Fact]
+    public async Task Cli_PreservesLfLineEndings()
+    {
+        // Arrange: file written with LF-only endings.
+        var filePath = Path.Combine(_testDirectory, "lf.contract.ts");
+        var content = "export interface Foo {\n  id: string;\n}\n";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath);
+
+        // Assert: comments are added but line endings stay LF (no CRLF re-encoding).
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("Foo.");
+        result.Should().Contain("Id.");
+        result.Should().NotContain("\r\n");
+    }
+
+    [Fact]
+    public async Task Cli_WithMultiLineMethodSignature_DoesNotInsertCommentInsideParameterList()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDirectory, "repo.contract.ts");
+        var content = @"export interface Repository {
+  save(
+    entity: string,
+    id: number
+  ): void;
+}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath);
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("Save.");
+        result.Should().Contain("@param {string} entity");
+        result.Should().Contain("@param {number} id");
+        // No phantom per-parameter member documentation injected into the signature.
+        result.Should().NotContain("* Entity.");
+    }
+
+    [Fact]
+    public async Task Cli_WithLoneCarriageReturnLineEndings_DoesNotCrash()
+    {
+        // Arrange: classic-Mac style lone-CR separators previously crashed the
+        // edit phase (parse/edit line-split mismatch).
+        var filePath = Path.Combine(_testDirectory, "cr.contract.ts");
+        var content = "interface Foo {\r  id: string;\r}\r";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath);
+
+        // Assert
+        exitCode.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Cli_WithGenericInterfaceDefault_DocumentsMembers()
+    {
+        // Arrange: braces inside the generic parameter list must not hide the body.
+        var filePath = Path.Combine(_testDirectory, "state.contract.ts");
+        var content = @"export interface State<T = {}> {
+  current: T;
+  reset(): void;
+}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath);
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("State.");
+        result.Should().Contain("Current.");
+        result.Should().Contain("Reset.");
+    }
+
+    [Fact]
     public async Task Cli_WithNonExistentPath_ReturnsError()
     {
         // Arrange
