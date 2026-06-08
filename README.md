@@ -1,5 +1,6 @@
 # TsCommentify
 
+[![CI / Publish to NuGet](https://github.com/QuinntyneBrown/TsCommentify/actions/workflows/publish.yml/badge.svg)](https://github.com/QuinntyneBrown/TsCommentify/actions/workflows/publish.yml)
 [![NuGet Version](https://img.shields.io/nuget/v/TsCommentify.svg)](https://www.nuget.org/packages/TsCommentify/)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/TsCommentify.svg)](https://www.nuget.org/packages/TsCommentify/)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
@@ -256,22 +257,38 @@ dotnet test --collect:"XPlat Code Coverage"
 
 Current test coverage: **79.1%** (exceeds 80% on business logic)
 
+### Continuous Integration & Releases
+
+The [`CI / Publish to NuGet`](.github/workflows/publish.yml) GitHub Actions workflow runs on every push and pull request to `main`:
+
+- **Pull requests**: build and run the test suite (Release) — no publish.
+- **Pushes to `main`**: build, test, pack, then push the package to [NuGet.org](https://www.nuget.org/packages/TsCommentify/).
+
+Publishing is idempotent (`--skip-duplicate`), so a release happens only when `<Version>` in `src/TsCommentify.Cli/TsCommentify.Cli.csproj` is bumped. The NuGet API key is stored in the `NUGET_API_KEY` repository secret.
+
 ### Project Structure
 
 ```
 TsCommentify/
+├── .github/
+│   └── workflows/
+│       └── publish.yml                    # CI: build/test on PRs, publish to NuGet on push to main
 ├── src/
 │   └── TsCommentify.Cli/
 │       ├── Program.cs                    # CLI entry point + parser selection
+│       ├── Configuration/
+│       │   └── FileProcessorOptions.cs   # Bound ignore-pattern options
 │       ├── sidecar/
 │       │   ├── sidecar.js                # Node/TypeScript-AST sidecar (JSON-RPC over stdio)
-│       │   └── package.json              # Pins the bundled `typescript` dependency
+│       │   ├── package.json              # Pins the bundled `typescript` dependency
+│       │   └── package-lock.json         # Locked sidecar dependency tree (restored via `npm ci`)
 │       └── Services/
 │           ├── SidecarTypeScriptParser.cs # AST parser (primary) — drives the sidecar
 │           ├── SidecarClient.cs           # stdio JSON-RPC transport to node
 │           ├── TypeScriptParser.cs        # Regex parser (fallback when node is absent)
 │           ├── CommentGenerator.cs        # Generates JSDoc comments
-│           └── FileProcessor.cs           # Orchestrates processing
+│           ├── FileProcessor.cs           # Orchestrates processing
+│           └── I*.cs                       # Service interfaces (DI contracts)
 └── tests/
     └── TsCommentify.Tests/
         ├── Services/                      # Unit tests
