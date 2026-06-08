@@ -1064,6 +1064,74 @@ function realFunction(x: number): number {
         act.Should().NotThrow();
     }
 
+    [Fact]
+    public void ParseFunctions_WithUnionTypeAlias_ParsesTypeDeclaration()
+    {
+        // Arrange
+        var content = @"export type ActivityTone = 'default' | 'outdoor' | 'indoor' | 'food';";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().ContainSingle();
+        result[0].Name.Should().Be("ActivityTone");
+        result[0].LineNumber.Should().Be(1);
+        result[0].Parameters.Should().BeEmpty();
+        result[0].ReturnType.Should().BeNull();
+        result[0].HasComment.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithGenericTypeAlias_ParsesTypeDeclaration()
+    {
+        // Arrange
+        var content = @"type Nullable<T> = T | null;";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().ContainSingle(f => f.Name == "Nullable");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithCommentedTypeAlias_DetectsComment()
+    {
+        // Arrange
+        var content = @"/** The tone of an activity. */
+export type ActivityTone = 'default' | 'food';";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Single(f => f.Name == "ActivityTone").HasComment.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithTypeofAndTypeProperty_DoesNotTreatAsTypeAlias()
+    {
+        // Arrange: neither `typeof` nor a `type:` property is a type alias.
+        var content = @"interface Token {
+  type: string;
+}
+
+const original = typeof window;";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().NotContain(f => f.Name == "window");
+        result.Should().NotContain(f => f.Name == "original");
+        result.Should().Contain(f => f.Name == "type");
+    }
+
     private string CreateTestFile(string content)
     {
         var filePath = Path.Combine(_testDirectory, $"test_{Guid.NewGuid()}.ts");

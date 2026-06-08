@@ -8,10 +8,10 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>tc</ToolCommandName>
     <PackageId>TsCommentify</PackageId>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <Authors>Quinntyne Brown</Authors>
-    <Description>A CLI tool that automatically generates JSDoc comments for TypeScript functions, methods, getters, setters, and interfaces (including their property and method signatures). Supports configurable ignore patterns for test files.</Description>
-    <PackageTags>typescript;comments;documentation;cli;jsdoc;code-generator;interfaces</PackageTags>
+    <Description>A CLI tool that automatically generates JSDoc comments for TypeScript functions, methods, getters, setters, interfaces (including their property and method signatures), and type alias declarations. Supports configurable ignore patterns for test files.</Description>
+    <PackageTags>typescript;comments;documentation;cli;jsdoc;code-generator;interfaces;types</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/QuinntyneBrown/TsCommentify</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

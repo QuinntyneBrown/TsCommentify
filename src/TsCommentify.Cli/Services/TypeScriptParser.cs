@@ -52,6 +52,19 @@ public class TypeScriptParser : ITypeScriptParser
                 continue;
             }
 
+            // Check for type alias declarations (e.g. `export type Tone = 'a' | 'b';`).
+            // The alias header receives the comment; its right-hand side is not
+            // re-evaluated as functions.
+            if (IsTypeAliasDeclaration(line))
+            {
+                var typeAlias = ParseTypeAliasDeclaration(lines, i);
+                if (typeAlias != null)
+                {
+                    functions.Add(typeAlias);
+                }
+                continue;
+            }
+
             // Check for function declarations
             if (IsFunctionDeclaration(line))
             {
@@ -130,6 +143,34 @@ public class TypeScriptParser : ITypeScriptParser
     {
         // Match: [export] [declare] interface Name [<...>] [extends ...] {
         return Regex.IsMatch(line, @"^\s*(export\s+)?(declare\s+)?interface\s+\w+");
+    }
+
+    private bool IsTypeAliasDeclaration(string line)
+    {
+        // Match: [export] [declare] type Name [<...>] =
+        // The `type` keyword must be followed by an identifier (so `typeof`,
+        // `type:` properties, and `type { X } from ...` re-exports do not match).
+        return Regex.IsMatch(line, @"^\s*(export\s+)?(declare\s+)?type\s+\w+\s*(<[^=]*>)?\s*=");
+    }
+
+    private FunctionInfo? ParseTypeAliasDeclaration(string[] lines, int lineIndex)
+    {
+        var line = lines[lineIndex];
+        var nameMatch = Regex.Match(line, @"type\s+(\w+)");
+        if (!nameMatch.Success)
+        {
+            return null;
+        }
+
+        // A type alias has no parameters or return type; only the name is
+        // documented, yielding a `/** <Readable name>. */` block.
+        return new FunctionInfo(
+            Name: nameMatch.Groups[1].Value,
+            LineNumber: lineIndex + 1,
+            Content: line,
+            Parameters: new List<ParameterInfo>(),
+            ReturnType: null,
+            HasComment: HasCommentAbove(lines, lineIndex));
     }
 
     // Parses an interface declaration and its members, adding a FunctionInfo for
