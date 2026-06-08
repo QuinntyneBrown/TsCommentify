@@ -16,12 +16,12 @@ jobs:
   build-test-publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # The project targets net8.0; the 8.0 SDK builds it directly (commands target
       # the .csproj files, not the .slnx, which would need a newer SDK to parse).
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
 
@@ -29,7 +29,7 @@ jobs:
       # dependency via `npm ci` (an MSBuild target), since node_modules is not
       # committed. Without Node, the sidecar would be missing from the package.
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
