@@ -1,0 +1,50 @@
+name: CI / Publish to NuGet
+
+# Builds and tests on every push/PR to main, and publishes the packed tool to
+# NuGet.org on pushes to main. Publishing is idempotent: `--skip-duplicate` means
+# a run whose version already exists on NuGet is a no-op success, so a new version
+# is released only when <Version> in TsCommentify.Cli.csproj is bumped.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The project targets net8.0; the 8.0 SDK builds it directly (commands target
+      # the .csproj files, not the .slnx, which would need a newer SDK to parse).
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Node + npm are required: the CLI build restores the sidecar's `typescript`
+      # dependency via `npm ci` (an MSBuild target), since node_modules is not
+      # committed. Without Node, the sidecar would be missing from the package.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Test (Release)
+        run: dotnet test tests/TsCommentify.Tests/TsCommentify.Tests.csproj --configuration Release
+
+      - name: Pack (Release)
+        run: dotnet pack src/TsCommentify.Cli/TsCommentify.Cli.csproj --configuration Release --output ${{ runner.temp }}/nupkg
+
+      # Publish only from main (push or manual dispatch). PRs build + test but never
+      # publish; fork PRs cannot read the secret anyway.
+      - name: Publish to NuGet
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        run: >
+          dotnet nuget push "${{ runner.temp }}/nupkg/*.nupkg"
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

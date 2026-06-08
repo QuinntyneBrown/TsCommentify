@@ -13,9 +13,15 @@ public class CliIntegrationTests : IDisposable
         _testDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(_testDirectory);
         
-        // Path to the compiled CLI
+        // Path to the compiled CLI. Derive the build configuration from this test
+        // assembly's own output dir (.../bin/<Config>/net8.0) instead of hardcoding
+        // "Debug", so the integration tests find the CLI whether CI builds Debug or
+        // Release — and exercise exactly the configuration being shipped.
+        var baseDir = AppContext.BaseDirectory
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var configuration = new DirectoryInfo(baseDir).Parent!.Name; // Debug | Release
         var solutionDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-        _cliPath = Path.Combine(solutionDir, "src", "TsCommentify.Cli", "bin", "Debug", "net8.0", "TsCommentify.Cli.dll");
+        _cliPath = Path.Combine(solutionDir, "src", "TsCommentify.Cli", "bin", configuration, "net8.0", "TsCommentify.Cli.dll");
     }
 
     public void Dispose()
