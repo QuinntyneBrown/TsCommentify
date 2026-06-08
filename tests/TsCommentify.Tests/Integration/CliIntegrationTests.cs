@@ -90,7 +90,7 @@ public class CliIntegrationTests : IDisposable
         result.Should().Contain("/**");
         result.Should().Contain("Foo.");
         result.Should().Contain("Id.");
-        result.Should().Contain("Get Name.");
+        result.Should().Contain("Gets the name.");
         result.Should().Contain("export interface Foo");
     }
 
@@ -132,7 +132,7 @@ public class CliIntegrationTests : IDisposable
         // Assert
         exitCode.Should().Be(0);
         var result = await File.ReadAllTextAsync(filePath);
-        result.Should().Contain("Save.");
+        result.Should().Contain("Saves.");
         result.Should().Contain("@param {string} entity");
         result.Should().Contain("@param {number} id");
         // No phantom per-parameter member documentation injected into the signature.
@@ -174,7 +174,46 @@ public class CliIntegrationTests : IDisposable
         var result = await File.ReadAllTextAsync(filePath);
         result.Should().Contain("State.");
         result.Should().Contain("Current.");
-        result.Should().Contain("Reset.");
+        result.Should().Contain("Resets.");
+    }
+
+    [Fact]
+    public async Task Cli_WithMultiLineSignature_DocumentsAllParamsAndReturn()
+    {
+        // This is a sidecar-only capability: the regex fallback cannot read a
+        // signature whose parameters span multiple lines. Skip when node is absent.
+        if (!NodeAvailable())
+        {
+            return;
+        }
+
+        var filePath = Path.Combine(_testDirectory, "multiline.ts");
+        var content = @"function calculateInvoice(
+  price: number,
+  quantity: number
+): number {
+  return price * quantity;
+}
+
+class Repo {
+  findUser(id: string): User
+  {
+    return null as any;
+  }
+}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        var exitCode = await RunCliAsync(filePath);
+
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        // Multi-line signature: every parameter and the return type are documented.
+        result.Should().Contain("@param {number} price");
+        result.Should().Contain("@param {number} quantity");
+        result.Should().Contain("@returns {number}");
+        // Method whose opening brace is on the next line is found and documented.
+        result.Should().Contain("Finds the user.");
+        result.Should().Contain("@param {string} id");
     }
 
     [Fact]
@@ -206,7 +245,33 @@ public class CliIntegrationTests : IDisposable
         process.Start();
         
         await process.WaitForExitAsync();
-        
+
         return process.ExitCode;
+    }
+
+    private static bool NodeAvailable()
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "node",
+                Arguments = "--version",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            if (process == null)
+            {
+                return false;
+            }
+            process.WaitForExit(5000);
+            return process.HasExited && process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

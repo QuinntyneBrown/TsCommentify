@@ -66,7 +66,8 @@ public class CommentGeneratorTests
         result.Should().Contain("*/");
         result.Should().Contain("Initialize");
         result.Should().NotContain("@param");
-        result.Should().Contain("@returns {void}");
+        // A void return documents nothing — no @returns tag is emitted.
+        result.Should().NotContain("@returns");
     }
 
     [Fact]
@@ -109,7 +110,7 @@ public class CommentGeneratorTests
         var result = _generator.GenerateComment(function);
 
         // Assert
-        result.Should().Contain("Calculate Total Price");
+        result.Should().Contain("Calculates the total price.");
     }
 
     [Fact]
@@ -129,7 +130,7 @@ public class CommentGeneratorTests
         var result = _generator.GenerateComment(function);
 
         // Assert
-        result.Should().Contain("Process Data");
+        result.Should().Contain("Processes the data.");
     }
 
     [Fact]
@@ -170,7 +171,7 @@ public class CommentGeneratorTests
 
         // Assert
         result.Should().Contain("@returns {boolean}");
-        result.Should().Contain("True if successful");
+        result.Should().Contain("True if valid; otherwise false.");
     }
 
     [Fact]
@@ -195,7 +196,7 @@ public class CommentGeneratorTests
     }
 
     [Fact]
-    public void GenerateComment_WithVoidReturn_GeneratesNoReturnValueDescription()
+    public void GenerateComment_WithVoidReturn_OmitsReturnsTag()
     {
         // Arrange
         var function = new FunctionInfo(
@@ -210,9 +211,9 @@ public class CommentGeneratorTests
         // Act
         var result = _generator.GenerateComment(function);
 
-        // Assert
-        result.Should().Contain("@returns {void}");
-        result.Should().Contain("No return value");
+        // Assert: documenting "returns nothing" is noise; no @returns for void.
+        result.Should().Contain("Cleanup.");
+        result.Should().NotContain("@returns");
     }
 
     [Fact]
@@ -243,6 +244,90 @@ public class CommentGeneratorTests
     }
 
     [Fact]
+    public void GenerateComment_WithActionVerbName_UsesConjugatedDescription()
+    {
+        var function = new FunctionInfo(
+            Name: "getUserProfile",
+            LineNumber: 1,
+            Content: string.Empty,
+            Parameters: new List<ParameterInfo>(),
+            ReturnType: "Profile",
+            HasComment: false);
+
+        var result = _generator.GenerateComment(function);
+
+        result.Should().Contain("Gets the user profile.");
+    }
+
+    [Fact]
+    public void GenerateComment_WithQuestionVerbName_UsesDeterminesWhetherAndNameAwareBoolean()
+    {
+        var function = new FunctionInfo(
+            Name: "hasAccess",
+            LineNumber: 1,
+            Content: string.Empty,
+            Parameters: new List<ParameterInfo>(),
+            ReturnType: "boolean",
+            HasComment: false);
+
+        var result = _generator.GenerateComment(function);
+
+        result.Should().Contain("Determines whether access.");
+        result.Should().Contain("True if access; otherwise false.");
+    }
+
+    [Fact]
+    public void GenerateComment_WithPromiseOfTypeReturn_DescribesResolvedType()
+    {
+        var function = new FunctionInfo(
+            Name: "loadUser",
+            LineNumber: 1,
+            Content: string.Empty,
+            Parameters: new List<ParameterInfo> { new("id", "string") },
+            ReturnType: "Promise<User>",
+            HasComment: false);
+
+        var result = _generator.GenerateComment(function);
+
+        result.Should().Contain("@returns {Promise<User>}");
+        result.Should().Contain("A promise that resolves to the user.");
+    }
+
+    [Fact]
+    public void GenerateComment_WithArrayReturn_DescribesAsArray()
+    {
+        var function = new FunctionInfo(
+            Name: "listUsers",
+            LineNumber: 1,
+            Content: string.Empty,
+            Parameters: new List<ParameterInfo>(),
+            ReturnType: "User[]",
+            HasComment: false);
+
+        var result = _generator.GenerateComment(function);
+
+        result.Should().Contain("An array of user values.");
+    }
+
+    [Fact]
+    public void GenerateComment_WithFunctionTypedReturn_KeepsFullTypeAndGenericDescription()
+    {
+        // The return type the regex parser used to drop entirely.
+        var function = new FunctionInfo(
+            Name: "makeAdder",
+            LineNumber: 1,
+            Content: string.Empty,
+            Parameters: new List<ParameterInfo> { new("base", "number") },
+            ReturnType: "(n: number) => number",
+            HasComment: false);
+
+        var result = _generator.GenerateComment(function);
+
+        result.Should().Contain("@returns {(n: number) => number}");
+        result.Should().Contain("The result of the operation.");
+    }
+
+    [Fact]
     public void GenerateComment_WithAcronymInName_HandlesCorrectly()
     {
         // Arrange
@@ -259,6 +344,6 @@ public class CommentGeneratorTests
         var result = _generator.GenerateComment(function);
 
         // Assert
-        result.Should().Contain("Parse HTML Content");
+        result.Should().Contain("Parses the HTML content.");
     }
 }

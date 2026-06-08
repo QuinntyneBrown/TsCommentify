@@ -9,10 +9,13 @@
 
 A CLI tool that automatically adds JSDoc comments to TypeScript functions and interfaces using best practices.
 
+Parsing is powered by the **official TypeScript compiler** running in a small Node.js sidecar (the same `ts.createSourceFile` AST that drives `tsc` and the editor tooling), so declarations are understood the way the compiler sees them — not approximated with regular expressions. Multi-line signatures, function-typed return types, methods whose `{` sits on the next line, and multi-line generic arrows are all handled correctly.
+
 ## Features
 
-- **Automatic Comment Generation**: Automatically generates JSDoc-style comments for TypeScript functions and interfaces
-- **Smart Parsing**: Supports multiple function declaration styles:
+- **Compiler-grade parsing**: Uses the real TypeScript AST (via a bundled Node sidecar) to find declarations and extract parameters and return types — including signatures that span multiple lines.
+- **Automatic Comment Generation**: Generates JSDoc-style comments for TypeScript functions and interfaces, with verb-aware descriptions (e.g. `calculateTotal` → *“Calculates the total.”*).
+- **Declaration styles supported**:
   - Regular functions (`function name() {}`)
   - Arrow functions (`const name = () => {}`)
   - Function expressions (`const name = function() {}`)
@@ -20,11 +23,20 @@ A CLI tool that automatically adds JSDoc comments to TypeScript functions and in
   - Exported functions (`export function name() {}`)
   - Class methods, getters, and setters
 - **Interface Support**: Documents interface declarations along with their property and method signatures (e.g. `*.contract.ts` files)
-- **Type-Aware**: Recognizes TypeScript type annotations for parameters and return types
-- **Comment Detection**: Skips functions, interfaces, and members that already have comments
+- **Type-Aware**: Reads parameter and return types straight from the AST (e.g. `string[]`, `Promise<User>`, `(n: number) => number`).
+- **Accurate Comment Detection**: Skips declarations that already have a comment, using the compiler's leading-comment ranges (no false positives from lines that merely start with `*`).
+- **Refuses to edit invalid files**: A file with a TypeScript syntax error is reported and skipped rather than risk mis-inserting comments.
+- **Graceful fallback**: If Node.js is not available, the tool falls back to a built-in regular-expression parser so it still runs (with reduced accuracy).
 - **Batch Processing**: Process single files or entire directories recursively
 - **Smart Filtering**: Automatically excludes `node_modules`, `dist`, `.d.ts` files, and test files (`*.spec.ts`, `*.test.ts`)
 - **Configurable Ignore Patterns**: Customize which files to ignore via `appsettings.json`
+
+## Requirements
+
+- **.NET 8.0** runtime (the tool itself).
+- **Node.js** on your `PATH` (any recent LTS, ≥ 18) for the high-accuracy TypeScript-AST engine. The required `typescript` package is bundled with the tool — you do **not** need a `node_modules` or a `tsconfig.json` in your project. If Node is missing, the tool automatically falls back to the regex parser.
+
+You can force a specific engine with the `TSCOMMENTIFY_PARSER` environment variable (`sidecar`, `regex`, or `auto` — the default), or via `"Parser": { "Engine": "..." }` in `appsettings.json`.
 
 ## Installation
 
@@ -94,20 +106,21 @@ const processData = (data: string[]) => {
 
 ```typescript
 /**
- * Calculate Total.
+ * Calculates the total.
  *
- * @param {number} price - The price
- * @param {number} quantity - The quantity
- * @returns {number} The result of the operation
+ * @param {number} price - The price.
+ * @param {number} quantity - The quantity.
+ *
+ * @returns {number} The number.
  */
 function calculateTotal(price: number, quantity: number): number {
   return price * quantity;
 }
 
 /**
- * Process Data.
+ * Processes the data.
  *
- * @param {any} data - The data
+ * @param {string[]} data - The data.
  */
 const processData = (data: string[]) => {
   return data.map(item => item.toUpperCase());
@@ -139,9 +152,9 @@ export interface Foo {
    */
   id: string;
   /**
-   * Get Display Name.
+   * Gets the display name.
    *
-   * @returns {string} The result of the operation
+   * @returns {string} The string.
    */
   getDisplayName(): string;
 }
@@ -162,6 +175,7 @@ The tool follows JSDoc best practices:
 ### Prerequisites
 
 - .NET 8.0 SDK or later
+- Node.js + npm (the build restores the sidecar's `typescript` dependency via `npm ci`; `node` is also used to run the AST engine and the end-to-end tests)
 
 ### Build
 
@@ -189,20 +203,26 @@ Current test coverage: **79.1%** (exceeds 80% on business logic)
 TsCommentify/
 ├── src/
 │   └── TsCommentify.Cli/
-│       ├── Program.cs              # CLI entry point
+│       ├── Program.cs                    # CLI entry point + parser selection
+│       ├── sidecar/
+│       │   ├── sidecar.js                # Node/TypeScript-AST sidecar (JSON-RPC over stdio)
+│       │   └── package.json              # Pins the bundled `typescript` dependency
 │       └── Services/
-│           ├── TypeScriptParser.cs # Parses TS files
-│           ├── CommentGenerator.cs # Generates comments
-│           └── FileProcessor.cs    # Orchestrates processing
+│           ├── SidecarTypeScriptParser.cs # AST parser (primary) — drives the sidecar
+│           ├── SidecarClient.cs           # stdio JSON-RPC transport to node
+│           ├── TypeScriptParser.cs        # Regex parser (fallback when node is absent)
+│           ├── CommentGenerator.cs        # Generates JSDoc comments
+│           └── FileProcessor.cs           # Orchestrates processing
 └── tests/
     └── TsCommentify.Tests/
-        ├── Services/               # Unit tests
-        └── Integration/            # Integration tests
+        ├── Services/                      # Unit tests
+        └── Integration/                   # Integration tests (end-to-end via the sidecar)
 ```
 
 ## Technologies
 
-- **C# / .NET 8.0**: Core runtime
+- **C# / .NET 8.0**: Core runtime and CLI host
+- **Node.js + TypeScript compiler API**: A bundled sidecar (`sidecar/sidecar.js`) parses TypeScript with the real `ts` AST and talks to the host over newline-delimited JSON-RPC on stdio
 - **System.CommandLine**: Command-line interface
 - **Microsoft.Extensions.DependencyInjection**: Dependency injection
 - **Microsoft.Extensions.Logging**: Structured logging

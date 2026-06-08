@@ -31,8 +31,38 @@ rootCommand.SetHandler(async (string path) =>
         builder.SetMinimumLevel(LogLevel.Information);
     });
 
-    // Register services
-    services.AddSingleton<ITypeScriptParser, TypeScriptParser>();
+    // Register services.
+    // Parser selection: prefer the Node/TypeScript-AST sidecar (compiler-grade
+    // parsing); fall back to the in-process regex parser when node is unavailable.
+    // Override with TSCOMMENTIFY_PARSER or config "Parser:Engine" = regex|sidecar|auto.
+    services.AddSingleton<TypeScriptParser>();
+    services.AddSingleton<ITypeScriptParser>(sp =>
+    {
+        var config = sp.GetRequiredService<IConfiguration>();
+        var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+        var engine = Environment.GetEnvironmentVariable("TSCOMMENTIFY_PARSER")
+                     ?? config["Parser:Engine"]
+                     ?? "auto";
+
+        if (!string.Equals(engine, "regex", StringComparison.OrdinalIgnoreCase))
+        {
+            var sidecar = SidecarTypeScriptParser.TryCreate(
+                loggerFactory.CreateLogger<SidecarTypeScriptParser>());
+            if (sidecar != null)
+            {
+                return sidecar;
+            }
+            if (string.Equals(engine, "sidecar", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Parser engine 'sidecar' was requested but the Node sidecar is unavailable (is 'node' on PATH?).");
+            }
+            loggerFactory.CreateLogger<Program>().LogWarning(
+                "Node sidecar unavailable; falling back to the regex parser (reduced accuracy).");
+        }
+
+        return sp.GetRequiredService<TypeScriptParser>();
+    });
     services.AddSingleton<ICommentGenerator, CommentGenerator>();
     services.AddSingleton<IFileProcessor, FileProcessor>();
     services.AddSingleton<IConfiguration>(configuration);

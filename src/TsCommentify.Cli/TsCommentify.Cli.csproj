@@ -17,6 +17,9 @@
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/QuinntyneBrown/TsCommentify</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- The Node sidecar tree is managed/copied explicitly below; keep node_modules
+         (32MB) and sidecar files out of the SDK's default Compile/None/Content globs. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);sidecar\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,6 +37,31 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- Restore the sidecar's typescript dependency at build time when it is missing
+       (e.g. a fresh clone or CI). Uses the committed package-lock.json via npm ci. -->
+  <Target Name="RestoreSidecarNodeModules"
+          BeforeTargets="BeforeBuild;GenerateNuspec"
+          Condition="!Exists('$(MSBuildProjectDirectory)\sidecar\node_modules\typescript\lib\typescript.js')">
+    <Message Importance="high" Text="Restoring sidecar node_modules (npm ci)..." />
+    <Exec Command="npm ci --omit=dev" WorkingDirectory="$(MSBuildProjectDirectory)\sidecar" />
+  </Target>
+
+  <!-- Ship the sidecar next to the tool: the script, its package.json, and a TRIMMED
+       typescript (only the runtime entrypoint lib/typescript.js + package.json — no
+       .d.ts, tsc, or tsserver). require('typescript') resolves from node_modules.
+       CopyToOutputDirectory places them under the tool's output, which PackAsTool
+       then packs into tools/<tfm>/any/ automatically (no explicit PackagePath). -->
+  <ItemGroup>
+    <Content Include="sidecar\sidecar.js" CopyToOutputDirectory="PreserveNewest" Pack="false" />
+    <Content Include="sidecar\package.json" CopyToOutputDirectory="PreserveNewest" Pack="false" />
+    <Content Include="sidecar\node_modules\typescript\package.json"
+             Link="sidecar\node_modules\typescript\package.json"
+             CopyToOutputDirectory="PreserveNewest" Pack="false" />
+    <Content Include="sidecar\node_modules\typescript\lib\typescript.js"
+             Link="sidecar\node_modules\typescript\lib\typescript.js"
+             CopyToOutputDirectory="PreserveNewest" Pack="false" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,9 @@
+{
+  "name": "tscommentify-sidecar",
+  "version": "0.0.0",
+  "private": true,
+  "main": "sidecar.js",
+  "dependencies": {
+    "typescript": "5.4.5"
+  }
+}
