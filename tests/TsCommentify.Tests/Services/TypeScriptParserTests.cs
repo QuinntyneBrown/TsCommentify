@@ -272,13 +272,13 @@ const multiply = (a: number, b: number): number => a * b;";
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].Name.Should().Be("add");
-        result[0].Parameters.Should().HaveCount(2);
-        result[0].Parameters[0].Name.Should().Be("a");
-        result[0].Parameters[0].Type.Should().Be("number");
-        result[0].ReturnType.Should().Be("number");
-        result[0].HasComment.Should().BeFalse();
+        result.Should().Contain(f => f.Name == "Calculator");
+        var method = result.Single(f => f.Name == "add");
+        method.Parameters.Should().HaveCount(2);
+        method.Parameters[0].Name.Should().Be("a");
+        method.Parameters[0].Type.Should().Be("number");
+        method.ReturnType.Should().Be("number");
+        method.HasComment.Should().BeFalse();
     }
 
     [Fact]
@@ -296,11 +296,11 @@ const multiply = (a: number, b: number): number => a * b;";
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].Name.Should().Be("processData");
-        result[0].Parameters.Should().HaveCount(1);
-        result[0].Parameters[0].Name.Should().Be("data");
-        result[0].ReturnType.Should().Be("void");
+        result.Should().Contain(f => f.Name == "Service");
+        var method = result.Single(f => f.Name == "processData");
+        method.Parameters.Should().HaveCount(1);
+        method.Parameters[0].Name.Should().Be("data");
+        method.ReturnType.Should().Be("void");
     }
 
     [Fact]
@@ -318,10 +318,10 @@ const multiply = (a: number, b: number): number => a * b;";
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].Name.Should().Be("getUser");
-        result[0].Parameters.Should().HaveCount(1);
-        result[0].ReturnType.Should().Be("User");
+        result.Should().Contain(f => f.Name == "UserService");
+        var method = result.Single(f => f.Name == "getUser");
+        method.Parameters.Should().HaveCount(1);
+        method.ReturnType.Should().Be("User");
     }
 
     [Fact]
@@ -339,10 +339,10 @@ const multiply = (a: number, b: number): number => a * b;";
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].Name.Should().Be("validate");
-        result[0].Parameters.Should().HaveCount(1);
-        result[0].ReturnType.Should().Be("boolean");
+        result.Should().Contain(f => f.Name == "BaseClass");
+        var method = result.Single(f => f.Name == "validate");
+        method.Parameters.Should().HaveCount(1);
+        method.ReturnType.Should().Be("boolean");
     }
 
     [Fact]
@@ -360,10 +360,10 @@ const multiply = (a: number, b: number): number => a * b;";
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].Name.Should().Be("calculateSum");
-        result[0].Parameters.Should().HaveCount(1);
-        result[0].ReturnType.Should().Be("number");
+        result.Should().Contain(f => f.Name == "MathUtils");
+        var method = result.Single(f => f.Name == "calculateSum");
+        method.Parameters.Should().HaveCount(1);
+        method.ReturnType.Should().Be("number");
     }
 
     [Fact]
@@ -381,9 +381,9 @@ const multiply = (a: number, b: number): number => a * b;";
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].Name.Should().Be("fetchData");
-        result[0].Parameters.Should().HaveCount(1);
+        result.Should().Contain(f => f.Name == "ApiService");
+        var method = result.Single(f => f.Name == "fetchData");
+        method.Parameters.Should().HaveCount(1);
     }
 
     [Fact]
@@ -413,11 +413,11 @@ const multiply = (a: number, b: number): number => a * b;";
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(4);
-        result[0].Name.Should().Be("add");
-        result[1].Name.Should().Be("subtract");
-        result[2].Name.Should().Be("multiply");
-        result[3].Name.Should().Be("divide");
+        result.Should().Contain(f => f.Name == "Calculator");
+        result.Should().Contain(f => f.Name == "add");
+        result.Should().Contain(f => f.Name == "subtract");
+        result.Should().Contain(f => f.Name == "multiply");
+        result.Should().Contain(f => f.Name == "divide");
     }
 
     [Fact]
@@ -438,8 +438,7 @@ const multiply = (a: number, b: number): number => a * b;";
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].HasComment.Should().BeTrue();
+        result.Single(f => f.Name == "processData").HasComment.Should().BeTrue();
     }
 
     [Fact]
@@ -457,9 +456,9 @@ const multiply = (a: number, b: number): number => a * b;";
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].Name.Should().Be("name");
-        result[0].ReturnType.Should().Be("string");
+        result.Should().Contain(f => f.Name == "Person");
+        var getter = result.Single(f => f.ReturnType == "string" && f.Name == "name");
+        getter.ReturnType.Should().Be("string");
     }
 
     [Fact]
@@ -477,10 +476,10 @@ const multiply = (a: number, b: number): number => a * b;";
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].Name.Should().Be("name");
-        result[0].Parameters.Should().HaveCount(1);
-        result[0].Parameters[0].Name.Should().Be("value");
+        result.Should().Contain(f => f.Name == "Person");
+        var setter = result.Single(f => f.Name == "name");
+        setter.Parameters.Should().HaveCount(1);
+        setter.Parameters[0].Name.Should().Be("value");
     }
 
     [Fact]
@@ -506,10 +505,10 @@ const arrow = (): void => {
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(3);
-        result[0].Name.Should().Be("standalone");
-        result[1].Name.Should().Be("method");
-        result[2].Name.Should().Be("arrow");
+        result.Should().Contain(f => f.Name == "standalone");
+        result.Should().Contain(f => f.Name == "MyClass");
+        result.Should().Contain(f => f.Name == "method");
+        result.Should().Contain(f => f.Name == "arrow");
     }
 
     [Fact]
@@ -527,10 +526,10 @@ const arrow = (): void => {
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].Name.Should().Be("log");
-        result[0].Parameters.Should().HaveCount(1);
-        result[0].ReturnType.Should().BeNull();
+        result.Should().Contain(f => f.Name == "Logger");
+        var method = result.Single(f => f.Name == "log");
+        method.Parameters.Should().HaveCount(1);
+        method.ReturnType.Should().BeNull();
     }
 
     [Fact]
@@ -548,9 +547,9 @@ const arrow = (): void => {
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].Name.Should().Be("formatDate");
-        result[0].ReturnType.Should().Be("string");
+        result.Should().Contain(f => f.Name == "Utils");
+        var method = result.Single(f => f.Name == "formatDate");
+        method.ReturnType.Should().Be("string");
     }
 
     [Fact]
@@ -568,8 +567,8 @@ const arrow = (): void => {
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].Name.Should().Be("loadData");
+        result.Should().Contain(f => f.Name == "DataService");
+        result.Should().Contain(f => f.Name == "loadData");
     }
 
     [Fact]
@@ -587,9 +586,9 @@ const arrow = (): void => {
         var result = _parser.ParseFunctions(filePath).ToList();
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].Name.Should().Be("getData");
-        result[0].ReturnType.Should().Be("Promise<Array<string>>");
+        result.Should().Contain(f => f.Name == "DataService");
+        var method = result.Single(f => f.Name == "getData");
+        method.ReturnType.Should().Be("Promise<Array<string>>");
     }
 
     [Fact]
@@ -1130,6 +1129,351 @@ const original = typeof window;";
         result.Should().NotContain(f => f.Name == "window");
         result.Should().NotContain(f => f.Name == "original");
         result.Should().Contain(f => f.Name == "type");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithEnum_ParsesEnumDeclaration()
+    {
+        // Arrange
+        var content = @"export enum ActivityTone {
+  Default,
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "ActivityTone" && f.LineNumber == 1 && !f.HasComment);
+    }
+
+    [Fact]
+    public void ParseFunctions_WithEnumMembers_ParsesEachMemberWithLine()
+    {
+        // Arrange
+        var content = @"export enum Color {
+  Red,
+  Green = 'green',
+  Blue,
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "Color" && f.LineNumber == 1);
+        result.Should().Contain(f => f.Name == "Red" && f.LineNumber == 2);
+        result.Should().Contain(f => f.Name == "Green" && f.LineNumber == 3);
+        result.Should().Contain(f => f.Name == "Blue" && f.LineNumber == 4);
+    }
+
+    [Fact]
+    public void ParseFunctions_WithConstEnum_ParsesDeclaration()
+    {
+        // Arrange
+        var content = @"export const enum Direction {
+  Up,
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "Direction");
+        result.Should().Contain(f => f.Name == "Up");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithSingleLineEnum_DocumentsOnlyTheEnum()
+    {
+        // Arrange: members share the declaration line and cannot receive a
+        // line-based comment, so only the enum itself is recorded.
+        var content = @"export enum Toggle { On, Off }";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().ContainSingle(f => f.Name == "Toggle");
+        result.Should().NotContain(f => f.Name == "On");
+        result.Should().NotContain(f => f.Name == "Off");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithEnumMemberStringValueContainingBrace_DoesNotBreakParsing()
+    {
+        // Arrange: a '}' / ',' inside a string initializer must not be mistaken for
+        // the enum body close or a member separator.
+        var content = @"enum Sep {
+  Comma = '},',
+  After,
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "Comma" && f.LineNumber == 2);
+        result.Should().Contain(f => f.Name == "After" && f.LineNumber == 3);
+    }
+
+    [Fact]
+    public void ParseFunctions_WithCommentedEnum_DetectsComment()
+    {
+        // Arrange
+        var content = @"/** The tone. */
+export enum ActivityTone {
+  Default,
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Single(f => f.Name == "ActivityTone").HasComment.Should().BeTrue();
+        result.Single(f => f.Name == "Default").HasComment.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithClassDeclaration_ParsesClassAndMethods()
+    {
+        // Arrange
+        var content = @"export class UserService {
+  getUser(id: string): User {
+    return users[id];
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "UserService" && f.LineNumber == 1);
+        result.Should().Contain(f => f.Name == "getUser" && f.ReturnType == "User");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithExportedAbstractClass_ParsesName()
+    {
+        // Arrange
+        var content = @"export abstract class BaseRepository<T> {
+  abstract find(id: string): T;
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "BaseRepository" && f.LineNumber == 1);
+        // The abstract (body-less) method is not documented — parity with the AST
+        // sidecar, which only documents members that have a body.
+        result.Should().NotContain(f => f.Name == "find");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithCommentedClass_DetectsComment()
+    {
+        // Arrange
+        var content = @"/** The user service. */
+export class UserService {
+  ping(): void {}
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Single(f => f.Name == "UserService").HasComment.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithClassExpression_DoesNotTreatAsClassDeclaration()
+    {
+        // Arrange: a class *expression* assigned to a const is not a class
+        // declaration; only its method is documentable.
+        var content = @"const Widget = class {
+  render(): void {}
+};";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().NotContain(f => f.Name == "Widget");
+        result.Should().Contain(f => f.Name == "render");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithCommentedEnumMember_DetectsComment()
+    {
+        // Arrange: a /** */ block above an enum MEMBER must be detected.
+        var content = @"enum Color {
+  /** The red one. */
+  Red,
+  Green,
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Single(f => f.Name == "Red").HasComment.Should().BeTrue();
+        result.Single(f => f.Name == "Green").HasComment.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithLineCommentAboveEnumMember_DetectsComment()
+    {
+        // Arrange: a single-line // comment above an enum member is an existing comment.
+        var content = @"enum Color {
+  // primary
+  Red,
+  Green,
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Single(f => f.Name == "Red").HasComment.Should().BeTrue();
+        result.Single(f => f.Name == "Green").HasComment.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithNumericEnumInitializers_ParsesEachMemberWithLine()
+    {
+        // Arrange: manually-numbered members exercise the plain-token (non-string)
+        // initializer path — an initializer must never leak into the next member name.
+        var content = @"export enum HttpStatus {
+  Ok = 200,
+  NotFound = 404,
+  Flag = 1 << 2,
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "HttpStatus" && f.LineNumber == 1);
+        result.Should().Contain(f => f.Name == "Ok" && f.LineNumber == 2);
+        result.Should().Contain(f => f.Name == "NotFound" && f.LineNumber == 3);
+        result.Should().Contain(f => f.Name == "Flag" && f.LineNumber == 4);
+    }
+
+    [Fact]
+    public void ParseFunctions_WithComputedEnumMember_SkipsIt()
+    {
+        // Arrange: a computed member name ([Sym.x]) has no readable identifier.
+        var content = @"enum E {
+  [Sym.x] = 1,
+  Normal = 2,
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "E");
+        result.Should().Contain(f => f.Name == "Normal");
+        result.Should().NotContain(f => f.Name.Contains("Sym") || f.Name.Contains("["));
+    }
+
+    [Fact]
+    public void ParseFunctions_WithConstructor_DoesNotDocumentConstructor()
+    {
+        // Arrange: a constructor is not documented (parity with the AST sidecar,
+        // where a ConstructorDeclaration has no member name).
+        var content = @"export class Account {
+  constructor(private id: string) {}
+  balance(): number { return 0; }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "Account");
+        result.Should().Contain(f => f.Name == "balance");
+        result.Should().NotContain(f => f.Name == "constructor");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithDeclarationInsideBlockComment_IsIgnored()
+    {
+        // Arrange: a declaration inside commented-out code must never be classified
+        // (otherwise a doc comment would be inserted INSIDE the block comment).
+        var content = @"/* example usage:
+export class Helper { m(): void {} }
+export function legacy(): void {}
+*/
+export function real(): void {}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().NotContain(f => f.Name == "Helper");
+        result.Should().NotContain(f => f.Name == "legacy");
+        result.Should().Contain(f => f.Name == "real");
+    }
+
+    [Fact]
+    public void ParseFunctions_WithCommentAboveDecorator_DetectsComment()
+    {
+        // Arrange: an existing doc above a decorator must be detected so the class is
+        // not re-documented (a decorator line sits between the doc and the class).
+        var content = @"/** The widget. */
+@Component({})
+export class Widget {
+  ping(): void {}
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Single(f => f.Name == "Widget").HasComment.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseFunctions_WithNamespacedDeclarations_ParsesNested()
+    {
+        // Arrange: declarations nested in a namespace are documented like top-level
+        // ones (the namespace wrapper is transparent to the line scan).
+        var content = @"export namespace Api {
+  export enum Status {
+    Ok,
+  }
+
+  export class Client {
+    send(): void {}
+  }
+}";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+
+        // Assert
+        result.Should().Contain(f => f.Name == "Status");
+        result.Should().Contain(f => f.Name == "Client");
+        result.Should().Contain(f => f.Name == "send");
     }
 
     private string CreateTestFile(string content)

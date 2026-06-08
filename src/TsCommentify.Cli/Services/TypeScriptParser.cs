@@ -35,13 +35,34 @@ public class TypeScriptParser : ITypeScriptParser
 
         var functions = new List<FunctionInfo>();
 
+        var inBlockComment = false;
         for (int i = 0; i < lines.Length; i++)
         {
             var line = lines[i].TrimStart();
-            
+
+            // Skip the interior of a /* ... */ block comment. Without this, a line
+            // such as `export class Foo {` sitting inside commented-out code would be
+            // classified as a real declaration and a doc comment would be inserted
+            // INSIDE the block comment, corrupting the file. (JSDoc-style blocks whose
+            // body lines start with '*' were already immune; commented-out code is not.)
+            if (inBlockComment)
+            {
+                if (line.Contains("*/")) inBlockComment = false;
+                continue;
+            }
+
             // Skip empty lines and single-line comments
             if (string.IsNullOrWhiteSpace(line) || line.StartsWith("//"))
                 continue;
+
+            // A block comment that opens here and does not also close on this line
+            // puts us into block-comment state; either way the opening line is trivia,
+            // not a declaration to classify.
+            if (line.StartsWith("/*"))
+            {
+                if (!line.Contains("*/")) inBlockComment = true;
+                continue;
+            }
 
             // Check for interface declarations. An interface and its members are
             // parsed as a block so the body is not re-evaluated as functions; the
@@ -49,6 +70,15 @@ public class TypeScriptParser : ITypeScriptParser
             if (IsInterfaceDeclaration(line))
             {
                 i = ParseInterface(lines, i, functions);
+                continue;
+            }
+
+            // Check for enum declarations. Like an interface, an enum and its
+            // members are parsed as a block so the body is not re-evaluated; the
+            // loop resumes after the enum's closing brace.
+            if (IsEnumDeclaration(line))
+            {
+                i = ParseEnum(lines, i, functions);
                 continue;
             }
 
@@ -61,6 +91,19 @@ public class TypeScriptParser : ITypeScriptParser
                 if (typeAlias != null)
                 {
                     functions.Add(typeAlias);
+                }
+                continue;
+            }
+
+            // Check for class declarations. Unlike interface/enum the body is NOT
+            // skipped: the class's own declaration is documented here, while its
+            // methods/accessors continue to be discovered by the line scan below.
+            if (IsClassDeclaration(line))
+            {
+                var classInfo = ParseClassDeclaration(lines, i);
+                if (classInfo != null)
+                {
+                    functions.Add(classInfo);
                 }
                 continue;
             }
@@ -94,6 +137,13 @@ public class TypeScriptParser : ITypeScriptParser
 
         // Skip control flow statements (if, switch, while, for, etc.)
         if (IsControlFlowStatement(line))
+        {
+            return false;
+        }
+
+        // A constructor is not documented as a method (the AST sidecar skips it
+        // too, since a ConstructorDeclaration has no member name).
+        if (Regex.IsMatch(line, @"^\s*constructor\s*\("))
         {
             return false;
         }
@@ -171,6 +221,197 @@ public class TypeScriptParser : ITypeScriptParser
             Parameters: new List<ParameterInfo>(),
             ReturnType: null,
             HasComment: HasCommentAbove(lines, lineIndex));
+    }
+
+    private bool IsClassDeclaration(string line)
+    {
+        // Match: [export] [default] [declare] [abstract] class Name [<...>] [extends/implements ...] {
+        // An anonymous `export default class {` has no name and is intentionally
+        // not matched (nothing to title the comment with).
+        return Regex.IsMatch(line, @"^\s*(export\s+)?(default\s+)?(declare\s+)?(abstract\s+)?class\s+\w+");
+    }
+
+    private FunctionInfo? ParseClassDeclaration(string[] lines, int lineIndex)
+    {
+        var line = lines[lineIndex];
+        var nameMatch = Regex.Match(line, @"class\s+(\w+)");
+        if (!nameMatch.Success)
+        {
+            return null;
+        }
+
+        // Only the class itself is documented here; its members are picked up by
+        // the normal method/accessor scan as the loop continues into the body.
+        return new FunctionInfo(
+            Name: nameMatch.Groups[1].Value,
+            LineNumber: lineIndex + 1,
+            Content: line,
+            Parameters: new List<ParameterInfo>(),
+            ReturnType: null,
+            HasComment: HasCommentAbove(lines, lineIndex));
+    }
+
+    private bool IsEnumDeclaration(string line)
+    {
+        // Match: [export] [declare] [const] enum Name {
+        return Regex.IsMatch(line, @"^\s*(export\s+)?(declare\s+)?(const\s+)?enum\s+\w+");
+    }
+
+    // Parses an enum declaration and its members, adding a FunctionInfo for the
+    // enum itself and for each member that begins its own line. Returns the index
+    // of the enum's closing brace so the caller can skip the processed block.
+    //
+    // The body is walked character-by-character (string- and comment-aware) so a
+    // member initializer that contains '}' or ',' inside a string literal (e.g.
+    // `Sep = '},'`) does not corrupt member splitting or the body's end detection.
+    private int ParseEnum(string[] lines, int startIndex, List<FunctionInfo> results)
+    {
+        var declLine = lines[startIndex];
+        var nameMatch = Regex.Match(declLine, @"enum\s+(\w+)");
+        if (nameMatch.Success)
+        {
+            results.Add(new FunctionInfo(
+                Name: nameMatch.Groups[1].Value,
+                LineNumber: startIndex + 1,
+                Content: declLine,
+                Parameters: new List<ParameterInfo>(),
+                ReturnType: null,
+                HasComment: HasCommentAbove(lines, startIndex)));
+        }
+
+        var braceDepth = 0;
+        var inBlockComment = false;
+        var stringDelim = '\0';
+
+        var memberBuf = new StringBuilder();
+        var memberStartLine = -1;
+        var memberStartsLine = false;
+
+        void Flush()
+        {
+            if (memberStartLine >= 0 && memberStartsLine)
+            {
+                var name = ExtractEnumMemberName(memberBuf.ToString().Trim());
+                if (name != null)
+                {
+                    results.Add(new FunctionInfo(
+                        Name: name,
+                        LineNumber: memberStartLine + 1,
+                        Content: memberBuf.ToString().Trim(),
+                        Parameters: new List<ParameterInfo>(),
+                        ReturnType: null,
+                        HasComment: HasCommentAbove(lines, memberStartLine)));
+                }
+            }
+
+            memberBuf.Clear();
+            memberStartLine = -1;
+            memberStartsLine = false;
+        }
+
+        void Begin(string[] src, int li, int ci)
+        {
+            if (memberStartLine >= 0)
+            {
+                return;
+            }
+            memberStartLine = li;
+            // A member sharing the declaration/brace line (or following another on
+            // the same line) cannot receive a line-based comment, so it is recorded
+            // only when nothing precedes it on its physical line.
+            memberStartsLine = src[li].Substring(0, ci).Trim().Length == 0;
+        }
+
+        for (int li = startIndex; li < lines.Length; li++)
+        {
+            var line = lines[li];
+
+            for (int ci = 0; ci < line.Length; ci++)
+            {
+                var c = line[ci];
+                var next = ci + 1 < line.Length ? line[ci + 1] : '\0';
+
+                if (inBlockComment)
+                {
+                    if (c == '*' && next == '/') { inBlockComment = false; ci++; }
+                    continue;
+                }
+
+                if (stringDelim != '\0')
+                {
+                    if (memberStartLine >= 0) memberBuf.Append(c);
+                    if (c == '\\' && next != '\0')
+                    {
+                        if (memberStartLine >= 0) memberBuf.Append(next);
+                        ci++;
+                    }
+                    else if (c == stringDelim)
+                    {
+                        stringDelim = '\0';
+                    }
+                    continue;
+                }
+
+                if (c == '/' && next == '/') break;            // line comment: ignore rest
+                if (c == '/' && next == '*') { inBlockComment = true; ci++; continue; }
+
+                if (c == '{')
+                {
+                    braceDepth++;
+                    if (braceDepth == 1) continue;             // enum body opens
+                    if (braceDepth == 2 && memberStartLine < 0) Begin(lines, li, ci);
+                    if (memberStartLine >= 0) memberBuf.Append(c); // nested (rare: object const)
+                    continue;
+                }
+
+                if (c == '}')
+                {
+                    braceDepth--;
+                    if (braceDepth == 0) { Flush(); return li; } // enum body closes
+                    if (memberStartLine >= 0) memberBuf.Append(c);
+                    continue;
+                }
+
+                if (braceDepth != 1)
+                {
+                    if (memberStartLine >= 0) memberBuf.Append(c);
+                    continue;
+                }
+
+                // Directly in the enum body.
+                if (c == ',') { Flush(); continue; }
+
+                if (c == '"' || c == '\'' || c == '`')
+                {
+                    Begin(lines, li, ci);
+                    stringDelim = c;
+                    memberBuf.Append(c);
+                    continue;
+                }
+
+                if (memberStartLine < 0)
+                {
+                    if (char.IsWhiteSpace(c)) continue;
+                    Begin(lines, li, ci);
+                }
+
+                memberBuf.Append(c);
+            }
+
+            // Preserve a token boundary across physical line breaks mid-member.
+            if (memberStartLine >= 0) memberBuf.Append(' ');
+        }
+
+        Flush();
+        return lines.Length - 1;
+    }
+
+    private string? ExtractEnumMemberName(string memberText)
+    {
+        // Member forms: `Name`, `Name = <const expr>`. A string-literal member name
+        // (`'a-b' = 1`) has no leading identifier and is skipped.
+        var match = Regex.Match(memberText, @"^(\w+)");
+        return match.Success ? match.Groups[1].Value : null;
     }
 
     // Parses an interface declaration and its members, adding a FunctionInfo for
@@ -404,6 +645,13 @@ public class TypeScriptParser : ITypeScriptParser
         {
             var line = lines[i].Trim();
             if (line.Length == 0)
+                continue;
+
+            // A decorator (e.g. `@Component({...})`) sits between a declaration and
+            // its doc comment. Skip decorator lines so an existing comment above the
+            // decorator is still detected — and not duplicated — matching the AST
+            // sidecar (whose getFullStart precedes decorators).
+            if (line.StartsWith("@"))
                 continue;
 
             return line.StartsWith("//")

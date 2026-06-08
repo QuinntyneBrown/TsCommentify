@@ -217,6 +217,137 @@ class Repo {
     }
 
     [Fact]
+    public async Task Cli_WithEnumDeclaration_DocumentsEnumAndMembers()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDirectory, "tone.ts");
+        var content = @"export enum ActivityTone {
+  Default,
+  Outdoor,
+  Indoor,
+}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath);
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("Activity Tone.");
+        result.Should().Contain("Default.");
+        result.Should().Contain("Outdoor.");
+        result.Should().Contain("Indoor.");
+        result.Should().Contain("export enum ActivityTone");
+        // Exactly four blocks: the enum plus its three members — pins that no member
+        // is dropped, duplicated, or stacked into the wrong position.
+        (result.Split("/**").Length - 1).Should().Be(4);
+    }
+
+    [Fact]
+    public async Task Cli_WithSingleLineEnum_DocumentsOnlyTheEnum()
+    {
+        // Arrange: members share the declaration line, so only the enum itself can
+        // be documented — no stacked per-member comment blocks.
+        var filePath = Path.Combine(_testDirectory, "direction.ts");
+        var content = "export enum Direction { Up, Down }\n";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath);
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("Direction.");
+        // Exactly one JSDoc block (the enum); members are not individually stacked.
+        (result.Split("/**").Length - 1).Should().Be(1);
+        result.Should().Contain("export enum Direction { Up, Down }");
+    }
+
+    [Fact]
+    public async Task Cli_WithClassDeclaration_DocumentsClassAndMethods()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDirectory, "user-service.ts");
+        var content = @"export class UserService {
+  getUser(id: string): User {
+    return null as any;
+  }
+}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath);
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("User Service.");
+        result.Should().Contain("Gets the user.");
+        result.Should().Contain("@param {string} id");
+        result.Should().Contain("export class UserService");
+        // Exactly two blocks: the class and its one method.
+        (result.Split("/**").Length - 1).Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Cli_WithNamespacedDeclarations_DocumentsNested()
+    {
+        // Arrange: declarations nested in a namespace must be documented end-to-end
+        // (regression: the AST sidecar previously never descended into namespaces).
+        var filePath = Path.Combine(_testDirectory, "api.ts");
+        var content = @"export namespace Api {
+  export enum Status {
+    Ok,
+    Error,
+  }
+
+  export class Client {
+    send(): void {}
+  }
+}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath);
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("Status.");
+        result.Should().Contain("Client.");
+        result.Should().Contain("Sends.");
+    }
+
+    [Fact]
+    public async Task Cli_WithDecoratedClassAlreadyDocumented_DoesNotDuplicate()
+    {
+        // Arrange: an existing JSDoc between a decorator and the class (the common
+        // Angular placement) must be detected so no duplicate comment is inserted.
+        var filePath = Path.Combine(_testDirectory, "decorated.ts");
+        var content = @"@Component({})
+/**
+ * The existing widget doc.
+ */
+export class Widget {
+  ping(): void {}
+}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath);
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("The existing widget doc.");
+        // The class already has a doc; only its method earns a new block.
+        result.Should().NotContain("Widget.");
+        (result.Split("/**").Length - 1).Should().Be(2); // existing class doc + ping
+    }
+
+    [Fact]
     public async Task Cli_WithNonExistentPath_ReturnsError()
     {
         // Arrange

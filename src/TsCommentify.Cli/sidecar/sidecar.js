@@ -84,14 +84,31 @@ function parse(file) {
     return line;
   };
 
-  // True iff a real comment immediately precedes the node. This is the
-  // AST-correct replacement for the regex parser's "nearest non-blank line
-  // starts with //, /* or *" heuristic — it never trips on a `* b;`
-  // continuation line and never misses a real /** */ block.
+  // True iff a real comment documents the node. This is the AST-correct
+  // replacement for the regex parser's "nearest non-blank line starts with //,
+  // /* or *" heuristic — it never trips on a `* b;` continuation line and never
+  // misses a real /** */ block.
+  //
+  // getFullStart() only sees trivia ABOVE the first decorator/modifier, so for a
+  // decorated declaration (e.g. an Angular `@Component()` class) we ALSO probe the
+  // gap after each decorator/modifier — the conventional hand-written JSDoc sits
+  // between the decorator and the `class`/method keyword. Without this the tool
+  // would fail to detect that existing comment and stack a duplicate above it.
   const hasComment = (node) => {
-    const ranges = ts.getLeadingCommentRanges(sf.text, node.getFullStart()) || [];
-    return ranges.length > 0;
+    if ((ts.getLeadingCommentRanges(sf.text, node.getFullStart()) || []).length > 0) {
+      return true;
+    }
+    for (const m of (node.modifiers || [])) {
+      if ((ts.getLeadingCommentRanges(sf.text, m.end) || []).length > 0) {
+        return true;
+      }
+    }
+    return false;
   };
+
+  // A computed member name (`[Foo.Bar]`, `[Symbol.iterator]`) has no readable
+  // identifier to document; getText returns the bracketed expression verbatim.
+  const isDocumentableName = (m) => m.name && !ts.isComputedPropertyName(m.name);
 
   const params = (node) => node.parameters.map((p) => ({
     name: p.name.getText(sf),
@@ -100,14 +117,42 @@ function parse(file) {
 
   const ret = (node) => (node.type ? collapse(node.type.getText(sf)) : null);
 
-  const push = (kind, name, node) => declarations.push({
+  // A member only earns a comment when it begins its own physical line: the
+  // comment is inserted on the line above, so a member sharing a line (e.g. every
+  // member of a single-line `enum E { A, B }`, or an inline `interface A { id }`)
+  // cannot be documented without corrupting the source. Top-level declarations are
+  // not subject to this — they effectively always begin their line.
+  const startsOwnLine = (node) => {
+    for (let i = node.getStart(sf) - 1; i >= 0; i--) {
+      const ch = sf.text.charCodeAt(i);
+      if (ch === 10 /* \n */) return true;
+      if (ch !== 32 /* space */ && ch !== 9 /* tab */ && ch !== 13 /* \r */) return false;
+    }
+    return true;
+  };
+
+  // Top-level declaration (function/interface/type/enum/class): always recorded.
+  // `sig` is the node carrying the parameter list + return type (the declaration
+  // itself for functions, absent for named-type declarations).
+  const pushDecl = (kind, name, node, sig) => declarations.push({
     kind, name, line: lineOf(node),
-    params: params(node), returnType: ret(node), hasComment: hasComment(node),
+    params: sig ? params(sig) : [], returnType: sig ? ret(sig) : null,
+    hasComment: hasComment(node),
   });
+
+  // Member of an interface/class/enum: recorded only when it starts its own line.
+  const pushMember = (kind, name, node, withSig) => {
+    if (!startsOwnLine(node)) return;
+    declarations.push({
+      kind, name, line: lineOf(node),
+      params: withSig ? params(node) : [], returnType: withSig ? ret(node) : null,
+      hasComment: hasComment(node),
+    });
+  };
 
   const visit = (node) => {
     if (ts.isFunctionDeclaration(node) && node.name) {
-      push('function', node.name.text, node);
+      pushDecl('function', node.name.text, node, node);
     } else if (ts.isVariableStatement(node)) {
       for (const d of node.declarationList.declarations) {
         const init = d.initializer;
@@ -121,33 +166,42 @@ function parse(file) {
         }
       }
     } else if (ts.isInterfaceDeclaration(node)) {
-      declarations.push({
-        kind: 'interface', name: node.name.text, line: lineOf(node),
-        params: [], returnType: null, hasComment: hasComment(node),
-      });
+      pushDecl('interface', node.name.text, node);
       for (const m of node.members) {
-        const mn = m.name && m.name.getText ? m.name.getText(sf) : null;
-        if (!mn) continue;
-        if (ts.isMethodSignature(m)) push('method', mn, m);
-        else if (ts.isPropertySignature(m)) {
-          declarations.push({
-            kind: 'property', name: mn, line: lineOf(m),
-            params: [], returnType: null, hasComment: hasComment(m),
-          });
-        }
+        if (!isDocumentableName(m)) continue;
+        const mn = unquote(m.name.getText(sf));
+        if (ts.isMethodSignature(m)) pushMember('method', mn, m, true);
+        else if (ts.isPropertySignature(m)) pushMember('property', mn, m, false);
       }
     } else if (ts.isTypeAliasDeclaration(node)) {
-      declarations.push({
-        kind: 'type', name: node.name.text, line: lineOf(node),
-        params: [], returnType: null, hasComment: hasComment(node),
-      });
-    } else if (ts.isClassDeclaration(node)) {
+      pushDecl('type', node.name.text, node);
+    } else if (ts.isEnumDeclaration(node)) {
+      pushDecl('enum', node.name.text, node);
       for (const m of node.members) {
-        const mn = m.name && m.name.getText ? m.name.getText(sf) : null;
-        if (!mn) continue;
-        if (ts.isMethodDeclaration(m)) push('method', mn, m);
-        else if (ts.isGetAccessor(m) || ts.isSetAccessor(m)) push('method', mn, m);
+        if (!isDocumentableName(m)) continue;
+        pushMember('enum-member', unquote(m.name.getText(sf)), m, false);
       }
+    } else if (ts.isClassDeclaration(node)) {
+      // An anonymous `export default class {}` has no name to document; its
+      // methods are still visited below.
+      if (node.name) pushDecl('class', node.name.text, node);
+      for (const m of node.members) {
+        if (!isDocumentableName(m)) continue;
+        const mn = m.name.getText(sf);
+        // Only concrete members (with a body) are documented: abstract methods and
+        // overload signatures have no body, and documenting each overload signature
+        // (rather than the implementation) would stack redundant comments. This also
+        // keeps parity with the regex parser, which only matches `{`-bodied methods.
+        if (ts.isMethodDeclaration(m) && m.body) pushMember('method', mn, m, true);
+        else if ((ts.isGetAccessor(m) || ts.isSetAccessor(m)) && m.body) pushMember('method', mn, m, true);
+      }
+    } else if (ts.isModuleDeclaration(node) && node.body) {
+      // namespace N { ... } / module M { ... }: descend into the body so nested
+      // declarations are documented like top-level ones (matching the regex parser,
+      // which scans every physical line regardless of nesting). node.body is a
+      // ModuleBlock, or — for a dotted name like `namespace A.B {}` — another
+      // ModuleDeclaration; forEachChild descends correctly through either.
+      ts.forEachChild(node.body, visit);
     }
   };
 
@@ -158,4 +212,18 @@ function parse(file) {
 
 function collapse(text) {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+// String-literal member names (`enum E { 'a-b' = 1 }`, `interface I { 'x': T }`)
+// arrive from getText with their quotes; strip them so the generated description
+// reads from the bare name.
+function unquote(text) {
+  if (text && text.length >= 2) {
+    const a = text[0];
+    const b = text[text.length - 1];
+    if ((a === '"' || a === "'" || a === '`') && a === b) {
+      return text.slice(1, -1);
+    }
+  }
+  return text;
 }

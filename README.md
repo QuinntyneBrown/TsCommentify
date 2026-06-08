@@ -14,15 +14,17 @@ Parsing is powered by the **official TypeScript compiler** running in a small No
 ## Features
 
 - **Compiler-grade parsing**: Uses the real TypeScript AST (via a bundled Node sidecar) to find declarations and extract parameters and return types — including signatures that span multiple lines.
-- **Automatic Comment Generation**: Generates JSDoc-style comments for TypeScript functions and interfaces, with verb-aware descriptions (e.g. `calculateTotal` → *“Calculates the total.”*).
+- **Automatic Comment Generation**: Generates JSDoc-style comments for TypeScript declarations, with verb-aware descriptions (e.g. `calculateTotal` → *“Calculates the total.”*).
 - **Declaration styles supported**:
   - Regular functions (`function name() {}`)
   - Arrow functions (`const name = () => {}`)
   - Function expressions (`const name = function() {}`)
   - Async functions (`async function name() {}`)
   - Exported functions (`export function name() {}`)
-  - Class methods, getters, and setters
-- **Interface Support**: Documents interface declarations along with their property and method signatures (e.g. `*.contract.ts` files)
+  - Classes (`class Name {}`) and their methods, getters, and setters
+  - Interfaces, along with their property and method signatures (e.g. `*.contract.ts` files)
+  - Enums (`enum Name {}` and `const enum`), along with their members
+  - Type aliases (`type Name = ...`)
 - **Type-Aware**: Reads parameter and return types straight from the AST (e.g. `string[]`, `Promise<User>`, `(n: number) => number`).
 - **Accurate Comment Detection**: Skips declarations that already have a comment, using the compiler's leading-comment ranges (no false positives from lines that merely start with `*`).
 - **Refuses to edit invalid files**: A file with a TypeScript syntax error is reported and skipped rather than risk mis-inserting comments.
@@ -159,6 +161,63 @@ export interface Foo {
   getDisplayName(): string;
 }
 ```
+
+### Classes, enums, and type aliases
+
+The same probing covers class and enum declarations (and their members) plus type aliases.
+
+#### Before
+
+```typescript
+export class UserService {
+  getUser(id: string): User { return null as any; }
+}
+
+export enum ActivityTone {
+  Default,
+  Outdoor,
+}
+
+export type Tone = 'default' | 'outdoor';
+```
+
+#### After
+
+```typescript
+/**
+ * User Service.
+ */
+export class UserService {
+  /**
+   * Gets the user.
+   *
+   * @param {string} id - The id.
+   * @returns {User} The user.
+   */
+  getUser(id: string): User { return null as any; }
+}
+
+/**
+ * Activity Tone.
+ */
+export enum ActivityTone {
+  /**
+   * Default.
+   */
+  Default,
+  /**
+   * Outdoor.
+   */
+  Outdoor,
+}
+
+/**
+ * Tone.
+ */
+export type Tone = 'default' | 'outdoor';
+```
+
+> A single-line enum such as `enum Direction { Up, Down }` documents only the enum itself — its members share the declaration line, so they can't take a line-above comment without rewriting the source.
 
 ## Best Practices
 
