@@ -1,5 +1,12 @@
 # TsCommentify
 
+[![NuGet Version](https://img.shields.io/nuget/v/TsCommentify.svg)](https://www.nuget.org/packages/TsCommentify/)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/TsCommentify.svg)](https://www.nuget.org/packages/TsCommentify/)
+[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#installation)
+
 A CLI tool that automatically adds JSDoc comments to TypeScript functions and interfaces using best practices.
 
 ## Features
@@ -203,11 +210,15 @@ TsCommentify/
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please read the [Contributing Guide](CONTRIBUTING.md) to get started.
+
+## Security
+
+To report a security vulnerability, please review our [Security Policy](SECURITY.md). Please do not report security issues through public GitHub issues.
 
 ## License
 
-This project is open source and available under the MIT License.
+This project is licensed under the MIT License — see the [LICENSE.md](LICENSE.md) file for details.
 
 ## Author
 
