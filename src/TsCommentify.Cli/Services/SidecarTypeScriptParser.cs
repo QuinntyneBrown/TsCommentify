@@ -113,7 +113,8 @@ public sealed class SidecarTypeScriptParser : ITypeScriptParser, IDisposable
             Content: string.Empty,
             Parameters: d.Params.Select(p => new ParameterInfo(p.Name, p.Type)).ToList(),
             ReturnType: d.ReturnType,
-            HasComment: d.HasComment)).ToList();
+            HasComment: d.HasComment,
+            Kind: string.IsNullOrEmpty(d.Kind) ? "function" : d.Kind)).ToList();
 
         _logger.LogInformation("Found {Count} declarations in {FilePath} (sidecar)", functions.Count, filePath);
         return functions;
@@ -151,6 +152,10 @@ public sealed class SidecarTypeScriptParser : ITypeScriptParser, IDisposable
         public List<SidecarParam> Params { get; set; } = new();
         public string? ReturnType { get; set; }
         public bool HasComment { get; set; }
+
+        // "function" | "class" | "interface" | "enum" | "type" | "method" |
+        // "property" | "enum-member" — emitted by sidecar.js for every declaration.
+        public string Kind { get; set; } = "function";
     }
 
     private sealed class SidecarParam

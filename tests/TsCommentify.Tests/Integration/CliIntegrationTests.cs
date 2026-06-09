@@ -354,6 +354,136 @@ export class Widget {
     }
 
     [Fact]
+    public async Task Cli_WithDeprecatedFlag_TagsTopLevelDeclarationOnly()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDirectory, "user-service.ts");
+        var content = @"export class UserService {
+  getUser(id: string): User {
+    return null as any;
+  }
+}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath, "--deprecated");
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("User Service.");
+        result.Should().Contain("Gets the user.");
+        result.Should().Contain("@deprecated");
+        // The class earns the tag; its method does not -> exactly one occurrence.
+        (result.Split("@deprecated").Length - 1).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Cli_WithInternalFlagOnFunction_TagsFunctionOnce()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDirectory, "calc.ts");
+        await File.WriteAllTextAsync(filePath,
+            "export function calculateTotal(price: number): number {\n  return price;\n}\n");
+
+        // Act
+        var exitCode = await RunCliAsync(filePath, "--internal");
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("Calculates the total.");
+        result.Should().Contain("@internal");
+        (result.Split("@internal").Length - 1).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Cli_WithInternalFlagOnInterface_TagsInterfaceNotMembers()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDirectory, "contract.ts");
+        var content = @"export interface MyContract {
+  id: string;
+  run(): void;
+}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath, "--internal");
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("My Contract.");
+        result.Should().Contain("@internal");
+        // The interface earns the tag; its two members do not.
+        (result.Split("@internal").Length - 1).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Cli_WithoutAnnotationFlags_AddsNoTags()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDirectory, "plain.ts");
+        await File.WriteAllTextAsync(filePath, "export class Foo {\n}\n");
+
+        // Act
+        var exitCode = await RunCliAsync(filePath);
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("Foo.");
+        result.Should().NotContain("@deprecated");
+        result.Should().NotContain("@internal");
+        result.Should().NotContain("@obsolete");
+        result.Should().NotContain("@publicApi");
+    }
+
+    [Fact]
+    public async Task Cli_WithMultipleAnnotationFlags_TagsTypeAlias()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDirectory, "tone.ts");
+        await File.WriteAllTextAsync(filePath, "export type Tone = 'default' | 'outdoor';\n");
+
+        // Act
+        var exitCode = await RunCliAsync(filePath, "--internal", "--public-api");
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("Tone.");
+        result.Should().Contain("@internal");
+        result.Should().Contain("@publicApi");
+    }
+
+    [Fact]
+    public async Task Cli_WithObsoleteFlagOnEnum_TagsEnumNotMembers()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDirectory, "status.ts");
+        var content = @"export enum Status {
+  Ok,
+  Error,
+}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath, "--obsolete");
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("Status.");
+        result.Should().Contain("Ok.");
+        result.Should().Contain("Error.");
+        result.Should().Contain("@obsolete");
+        // The enum earns the tag; its two members do not -> exactly one occurrence.
+        (result.Split("@obsolete").Length - 1).Should().Be(1);
+    }
+
+    [Fact]
     public async Task Cli_WithNonExistentPath_ReturnsError()
     {
         // Arrange
@@ -366,12 +496,13 @@ export class Widget {
         exitCode.Should().Be(1);
     }
 
-    private async Task<int> RunCliAsync(string path)
+    private async Task<int> RunCliAsync(string path, params string[] extraArgs)
     {
+        var extra = extraArgs.Length > 0 ? " " + string.Join(" ", extraArgs) : string.Empty;
         var processStartInfo = new ProcessStartInfo
         {
             FileName = "dotnet",
-            Arguments = $"\"{_cliPath}\" \"{path}\"",
+            Arguments = $"\"{_cliPath}\" \"{path}\"{extra}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,

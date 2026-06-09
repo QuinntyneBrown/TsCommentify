@@ -12,8 +12,35 @@ var pathArgument = new Argument<string>(
 
 rootCommand.AddArgument(pathArgument);
 
-rootCommand.SetHandler(async (string path) =>
+// Optional annotation flags. When set, the corresponding JSDoc modifier tag is
+// appended to every generated *top-level* declaration comment
+// (function/class/interface/enum/type) — not to individual members. Flags are
+// combinable; the tags are emitted in a fixed, canonical order.
+var deprecatedOption = new Option<bool>(
+    "--deprecated", "Add an @deprecated tag to generated top-level declaration comments.");
+var obsoleteOption = new Option<bool>(
+    "--obsolete", "Add an @obsolete tag to generated top-level declaration comments.");
+var internalOption = new Option<bool>(
+    "--internal", "Add an @internal tag to generated top-level declaration comments.");
+var publicApiOption = new Option<bool>(
+    new[] { "--public-api", "--publicApi" },
+    "Add an @publicApi tag to generated top-level declaration comments.");
+
+rootCommand.AddOption(deprecatedOption);
+rootCommand.AddOption(obsoleteOption);
+rootCommand.AddOption(internalOption);
+rootCommand.AddOption(publicApiOption);
+
+rootCommand.SetHandler(async (string path, bool deprecated, bool obsolete, bool markInternal, bool publicApi) =>
 {
+    // Canonical tag order (deprecation first, then visibility), independent of the
+    // order the flags were passed on the command line.
+    var annotationTags = new List<string>();
+    if (deprecated) annotationTags.Add("@deprecated");
+    if (obsolete) annotationTags.Add("@obsolete");
+    if (markInternal) annotationTags.Add("@internal");
+    if (publicApi) annotationTags.Add("@publicApi");
+
     // Build configuration
     var configuration = new ConfigurationBuilder()
         .SetBasePath(Directory.GetCurrentDirectory())
@@ -67,6 +94,9 @@ rootCommand.SetHandler(async (string path) =>
     services.AddSingleton<IFileProcessor, FileProcessor>();
     services.AddSingleton<IConfiguration>(configuration);
 
+    // Annotation tags selected via CLI flags; consumed by CommentGenerator.
+    services.AddSingleton(new CommentAnnotationOptions { Tags = annotationTags });
+
     // Build service provider
     using var serviceProvider = services.BuildServiceProvider();
     var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
@@ -101,6 +131,6 @@ rootCommand.SetHandler(async (string path) =>
         logger.LogError(ex, "An error occurred while processing");
         Environment.Exit(1);
     }
-}, pathArgument);
+}, pathArgument, deprecatedOption, obsoleteOption, internalOption, publicApiOption);
 
 return await rootCommand.InvokeAsync(args);

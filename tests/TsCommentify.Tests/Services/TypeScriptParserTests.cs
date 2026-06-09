@@ -1476,6 +1476,62 @@ export class Widget {
         result.Should().Contain(f => f.Name == "send");
     }
 
+    [Fact]
+    public void ParseFunctions_AssignsDeclarationKinds_TopLevelVsMembers()
+    {
+        // Arrange: one of each construct. The regex parser's Kind classification
+        // gates the optional annotation tags (@deprecated/@internal/...), so it is
+        // verified directly here — not only indirectly through the AST sidecar.
+        var content = @"export function topLevel(): void {}
+
+const arrow = (): void => {};
+
+export class Service {
+  doWork(): void {}
+  get title(): string { return ''; }
+  set caption(v: string) {}
+  static build(): void {}
+  async load(): Promise<void> {}
+  private helper(): void {}
+}
+
+export interface Contract {
+  id: string;
+  run(): void;
+}
+
+export enum Mode {
+  On,
+}
+
+export type Alias = string;";
+        var filePath = CreateTestFile(content);
+
+        // Act
+        var result = _parser.ParseFunctions(filePath).ToList();
+        string Kind(string name) => result.Single(f => f.Name == name).Kind;
+
+        // Assert: top-level declarations carry their own kind...
+        Kind("topLevel").Should().Be("function");
+        Kind("arrow").Should().Be("function");
+        Kind("Service").Should().Be("class");
+        Kind("Contract").Should().Be("interface");
+        Kind("Mode").Should().Be("enum");
+        Kind("Alias").Should().Be("type");
+
+        // ...and members are classified as members, so they never receive tags —
+        // including getters/setters and static/async/access-modified methods.
+        Kind("doWork").Should().Be("method");
+        Kind("title").Should().Be("method");   // getter
+        Kind("caption").Should().Be("method"); // setter
+        Kind("build").Should().Be("method");   // static
+        Kind("load").Should().Be("method");    // async
+        Kind("helper").Should().Be("method");  // private
+        Kind("id").Should().Be("property");
+        Kind("run").Should().Be("method");
+        Kind("On").Should().Be("enum-member");
+    }
+
     private string CreateTestFile(string content)
     {
         var filePath = Path.Combine(_testDirectory, $"test_{Guid.NewGuid()}.ts");

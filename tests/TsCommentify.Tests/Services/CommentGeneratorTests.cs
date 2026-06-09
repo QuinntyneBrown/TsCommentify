@@ -346,4 +346,100 @@ public class CommentGeneratorTests
         // Assert
         result.Should().Contain("Parses the HTML content.");
     }
+
+    // ---- Annotation tags (CLI flags) --------------------------------------
+
+    private static CommentGenerator GeneratorWith(params string[] tags)
+        => new(new Mock<ILogger<CommentGenerator>>().Object,
+               new CommentAnnotationOptions { Tags = tags });
+
+    private static FunctionInfo Decl(string name, string kind, params ParameterInfo[] parameters)
+        => new(
+            Name: name,
+            LineNumber: 1,
+            Content: string.Empty,
+            Parameters: parameters.ToList(),
+            ReturnType: null,
+            HasComment: false,
+            Kind: kind);
+
+    [Theory]
+    [InlineData("function")]
+    [InlineData("class")]
+    [InlineData("interface")]
+    [InlineData("enum")]
+    [InlineData("type")]
+    public void GenerateComment_WithAnnotationFlag_AddsTagToTopLevelDeclaration(string kind)
+    {
+        var generator = GeneratorWith("@deprecated");
+
+        var result = generator.GenerateComment(Decl("Widget", kind));
+
+        // Emitted as a proper JSDoc body line.
+        result.Should().Contain(" * @deprecated");
+    }
+
+    [Theory]
+    [InlineData("method")]
+    [InlineData("property")]
+    [InlineData("enum-member")]
+    public void GenerateComment_WithAnnotationFlag_DoesNotTagMembers(string kind)
+    {
+        var generator = GeneratorWith("@deprecated", "@internal");
+
+        var result = generator.GenerateComment(Decl("member", kind));
+
+        result.Should().NotContain("@deprecated");
+        result.Should().NotContain("@internal");
+    }
+
+    [Fact]
+    public void GenerateComment_WithoutAnnotationFlags_EmitsNoTags()
+    {
+        var generator = GeneratorWith(); // no flags -> unchanged output
+
+        var result = generator.GenerateComment(Decl("UserService", "class"));
+
+        result.Should().Contain("User Service.");
+        result.Should().NotContain("@deprecated");
+        result.Should().NotContain("@obsolete");
+        result.Should().NotContain("@internal");
+        result.Should().NotContain("@publicApi");
+    }
+
+    [Fact]
+    public void GenerateComment_WithMultipleAnnotationTags_EmitsAllInSuppliedOrder()
+    {
+        var generator = GeneratorWith("@deprecated", "@obsolete", "@internal", "@publicApi");
+
+        var result = generator.GenerateComment(Decl("UserService", "class"));
+
+        result.Should().Contain("@deprecated");
+        result.Should().Contain("@obsolete");
+        result.Should().Contain("@internal");
+        result.Should().Contain("@publicApi");
+        result.IndexOf("@deprecated", StringComparison.Ordinal)
+            .Should().BeLessThan(result.IndexOf("@obsolete", StringComparison.Ordinal));
+        result.IndexOf("@obsolete", StringComparison.Ordinal)
+            .Should().BeLessThan(result.IndexOf("@internal", StringComparison.Ordinal));
+        result.IndexOf("@internal", StringComparison.Ordinal)
+            .Should().BeLessThan(result.IndexOf("@publicApi", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void GenerateComment_WithAnnotationOnFunction_PlacesTagAfterDescriptionBeforeParams()
+    {
+        var generator = GeneratorWith("@deprecated");
+
+        var result = generator.GenerateComment(
+            Decl("calculateTotal", "function", new ParameterInfo("price", "number")));
+
+        result.Should().Contain("@deprecated");
+        result.Should().Contain("@param {number} price");
+        // Order: description -> tag -> params.
+        result.IndexOf("Calculates the total.", StringComparison.Ordinal)
+            .Should().BeLessThan(result.IndexOf("@deprecated", StringComparison.Ordinal));
+        result.IndexOf("@deprecated", StringComparison.Ordinal)
+            .Should().BeLessThan(result.IndexOf("@param", StringComparison.Ordinal));
+    }
 }

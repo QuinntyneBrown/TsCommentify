@@ -220,7 +220,8 @@ public class TypeScriptParser : ITypeScriptParser
             Content: line,
             Parameters: new List<ParameterInfo>(),
             ReturnType: null,
-            HasComment: HasCommentAbove(lines, lineIndex));
+            HasComment: HasCommentAbove(lines, lineIndex),
+            Kind: "type");
     }
 
     private bool IsClassDeclaration(string line)
@@ -248,7 +249,8 @@ public class TypeScriptParser : ITypeScriptParser
             Content: line,
             Parameters: new List<ParameterInfo>(),
             ReturnType: null,
-            HasComment: HasCommentAbove(lines, lineIndex));
+            HasComment: HasCommentAbove(lines, lineIndex),
+            Kind: "class");
     }
 
     private bool IsEnumDeclaration(string line)
@@ -276,7 +278,8 @@ public class TypeScriptParser : ITypeScriptParser
                 Content: declLine,
                 Parameters: new List<ParameterInfo>(),
                 ReturnType: null,
-                HasComment: HasCommentAbove(lines, startIndex)));
+                HasComment: HasCommentAbove(lines, startIndex),
+                Kind: "enum"));
         }
 
         var braceDepth = 0;
@@ -300,7 +303,8 @@ public class TypeScriptParser : ITypeScriptParser
                         Content: memberBuf.ToString().Trim(),
                         Parameters: new List<ParameterInfo>(),
                         ReturnType: null,
-                        HasComment: HasCommentAbove(lines, memberStartLine)));
+                        HasComment: HasCommentAbove(lines, memberStartLine),
+                        Kind: "enum-member"));
                 }
             }
 
@@ -439,7 +443,8 @@ public class TypeScriptParser : ITypeScriptParser
                 Content: declLine,
                 Parameters: new List<ParameterInfo>(),
                 ReturnType: null,
-                HasComment: HasCommentAbove(lines, startIndex)));
+                HasComment: HasCommentAbove(lines, startIndex),
+                Kind: "interface"));
         }
 
         var braceDepth = 0;
@@ -606,7 +611,8 @@ public class TypeScriptParser : ITypeScriptParser
                 Content: memberText,
                 Parameters: ParseParameters(memberText),
                 ReturnType: ParseInterfaceMemberReturnType(memberText),
-                HasComment: hasComment);
+                HasComment: hasComment,
+                Kind: "method");
         }
 
         // Property signature: name[?]: type
@@ -619,7 +625,8 @@ public class TypeScriptParser : ITypeScriptParser
                 Content: memberText,
                 Parameters: new List<ParameterInfo>(),
                 ReturnType: null,
-                HasComment: hasComment);
+                HasComment: hasComment,
+                Kind: "property");
         }
 
         return null;
@@ -665,13 +672,19 @@ public class TypeScriptParser : ITypeScriptParser
     private FunctionInfo? ParseFunctionDeclaration(string[] lines, int lineIndex, bool hasComment)
     {
         var line = lines[lineIndex];
-        
-        // Extract function name - try different patterns
+
+        // Extract function name - try different patterns. The matched pattern also
+        // tells us the kind: a free function/arrow/expression vs. a class member.
+        // The bare `name(...)` and `get/set name(...)` forms are only valid inside a
+        // class body, so a match there means "method"; this is the regex parser's
+        // (line-local) equivalent of the sidecar's AST-derived kind, and keeps
+        // members from receiving the top-level-only annotation tags.
         Match nameMatch;
-        
+        var kind = "function";
+
         // First, try variable assignment pattern (covers arrow functions and function expressions)
         nameMatch = Regex.Match(line, @"(?:const|let|var)\s+(\w+)\s*=");
-        
+
         if (!nameMatch.Success)
         {
             // Try regular function declaration
@@ -682,12 +695,14 @@ public class TypeScriptParser : ITypeScriptParser
         {
             // Try class method pattern: [access] [static] [async] methodName
             nameMatch = Regex.Match(line, @"^\s*(?:(?:public|private|protected)\s+)?(?:static\s+)?(?:async\s+)?(\w+)\s*\(");
+            if (nameMatch.Success) kind = "method";
         }
 
         if (!nameMatch.Success)
         {
             // Try getter/setter pattern: [access] [static] get/set name
             nameMatch = Regex.Match(line, @"^\s*(?:(?:public|private|protected)\s+)?(?:static\s+)?(?:get|set)\s+(\w+)\s*\(");
+            if (nameMatch.Success) kind = "method";
         }
 
         if (!nameMatch.Success)
@@ -712,7 +727,8 @@ public class TypeScriptParser : ITypeScriptParser
             Content: content,
             Parameters: parameters,
             ReturnType: returnType,
-            HasComment: hasComment
+            HasComment: hasComment,
+            Kind: kind
         );
     }
 

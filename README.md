@@ -27,6 +27,7 @@ Parsing is powered by the **official TypeScript compiler** running in a small No
   - Enums (`enum Name {}` and `const enum`), along with their members
   - Type aliases (`type Name = ...`)
 - **Type-Aware**: Reads parameter and return types straight from the AST (e.g. `string[]`, `Promise<User>`, `(n: number) => number`).
+- **Optional annotation tags**: Flags (`--deprecated`, `--obsolete`, `--internal`, `--public-api`) stamp the matching JSDoc/TSDoc modifier tag onto generated top-level declaration comments (see [Annotation tags](#annotation-tags)).
 - **Accurate Comment Detection**: Skips declarations that already have a comment, using the compiler's leading-comment ranges (no false positives from lines that merely start with `*`).
 - **Refuses to edit invalid files**: A file with a TypeScript syntax error is reported and skipped rather than risk mis-inserting comments.
 - **Graceful fallback**: If Node.js is not available, the tool falls back to a built-in regular-expression parser so it still runs (with reduced accuracy).
@@ -72,6 +73,41 @@ tc path/to/project
 ```
 
 The tool will recursively scan all `.ts` and `.tsx` files in the directory and add comments to functions that don't have them.
+
+### Annotation tags
+
+Optional flags add a JSDoc/TSDoc modifier tag to every generated **top-level declaration** comment — functions, classes, interfaces, enums, and type aliases. The tags are *not* applied to members (methods, properties, enum members): annotating the declaration already covers its surface.
+
+| Flag | Tag added |
+|------|-----------|
+| `--deprecated` | `@deprecated` |
+| `--obsolete` | `@obsolete` |
+| `--internal` | `@internal` |
+| `--public-api` (alias `--publicApi`) | `@publicApi` |
+
+The flags are combinable, and the tags are emitted in a fixed, canonical order (`@deprecated`, `@obsolete`, `@internal`, `@publicApi`) regardless of the order you pass them. They are placed immediately after the description and before any `@param`/`@returns` documentation. Declarations that already have a comment are skipped, so re-running never duplicates a tag.
+
+```bash
+tc src/legacy --deprecated --internal
+```
+
+```typescript
+/**
+ * User Service.
+ *
+ * @deprecated
+ * @internal
+ */
+export class UserService {
+  /**
+   * Gets the user.
+   *
+   * @param {string} id - The id.
+   * @returns {User} The user.
+   */
+  getUser(id: string): User { return null as any; }
+}
+```
 
 ### Configuration
 
