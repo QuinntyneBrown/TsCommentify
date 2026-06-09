@@ -283,4 +283,198 @@ function test2() {}";
         _parserMock.Verify(p => p.ParseFunctions(file1), Times.Once);
         _parserMock.Verify(p => p.ParseFunctions(file2), Times.Once);
     }
+
+    // ---- Annotation tags on already-commented declarations ----------------
+
+    private FileProcessor ProcessorWithTags(params string[] tags)
+        => new(_parserMock.Object, _generatorMock.Object, _loggerMock.Object,
+               _configurationMock.Object, new CommentAnnotationOptions { Tags = tags });
+
+    private string WriteFile(string name, string content)
+    {
+        var path = Path.Combine(_testDirectory, name);
+        File.WriteAllText(path, content);
+        return path;
+    }
+
+    [Fact]
+    public async Task ProcessFileAsync_WithFlagAndExistingMultiLineComment_AddsTagToBlock()
+    {
+        // Arrange
+        var content = "/**\n * User Service.\n */\nexport class UserService {}\n";
+        var filePath = WriteFile("svc.ts", content);
+        var decl = new FunctionInfo("UserService", 4, "", new List<ParameterInfo>(), null,
+            HasComment: true, Kind: "class");
+        _parserMock.Setup(p => p.ParseFunctions(filePath)).Returns(new List<FunctionInfo> { decl });
+
+        // Act
+        await ProcessorWithTags("@deprecated").ProcessFileAsync(filePath);
+
+        // Assert
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("@deprecated");
+        (result.Split("@deprecated").Length - 1).Should().Be(1);
+        result.Should().Contain("User Service.");
+        result.Should().Contain("export class UserService {}");
+        // An update reuses the existing block; the generator is not invoked.
+        _generatorMock.Verify(g => g.GenerateComment(It.IsAny<FunctionInfo>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProcessFileAsync_WithFlagAndTagAlreadyPresent_LeavesFileByteForByteUnchanged()
+    {
+        // Arrange
+        var content = "/**\n * User Service.\n *\n * @deprecated\n */\nexport class UserService {}\n";
+        var filePath = WriteFile("svc.ts", content);
+        var decl = new FunctionInfo("UserService", 6, "", new List<ParameterInfo>(), null,
+            HasComment: true, Kind: "class");
+        _parserMock.Setup(p => p.ParseFunctions(filePath)).Returns(new List<FunctionInfo> { decl });
+
+        // Act
+        await ProcessorWithTags("@deprecated").ProcessFileAsync(filePath);
+
+        // Assert: idempotent — no duplicate tag, and no needless rewrite.
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Be(content);
+        (result.Split("@deprecated").Length - 1).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ProcessFileAsync_WithFlagAndSingleLineComment_ExpandsBlockAndAddsTag()
+    {
+        // Arrange
+        var content = "/** Tone. */\nexport type Tone = 'a' | 'b';\n";
+        var filePath = WriteFile("tone.ts", content);
+        var decl = new FunctionInfo("Tone", 2, "", new List<ParameterInfo>(), null,
+            HasComment: true, Kind: "type");
+        _parserMock.Setup(p => p.ParseFunctions(filePath)).Returns(new List<FunctionInfo> { decl });
+
+        // Act
+        await ProcessorWithTags("@internal").ProcessFileAsync(filePath);
+
+        // Assert: single-line block is expanded to multi-line with the tag.
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("@internal");
+        result.Should().Contain(" * Tone.");
+        result.Should().Contain("export type Tone = 'a' | 'b';");
+        // No longer a one-line block.
+        result.Should().NotContain("/** Tone. */");
+    }
+
+    [Fact]
+    public async Task ProcessFileAsync_WithFlagAndMultipleMissingTags_AddsAllInListOrder()
+    {
+        // Arrange
+        var content = "/**\n * User Service.\n */\nexport class UserService {}\n";
+        var filePath = WriteFile("svc.ts", content);
+        var decl = new FunctionInfo("UserService", 4, "", new List<ParameterInfo>(), null,
+            HasComment: true, Kind: "class");
+        _parserMock.Setup(p => p.ParseFunctions(filePath)).Returns(new List<FunctionInfo> { decl });
+
+        // Act
+        await ProcessorWithTags("@deprecated", "@internal").ProcessFileAsync(filePath);
+
+        // Assert
+        var result = await File.ReadAllTextAsync(filePath);
+        result.IndexOf("@deprecated", StringComparison.Ordinal)
+            .Should().BeLessThan(result.IndexOf("@internal", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ProcessFileAsync_WithFlagAndCommentHasParam_InsertsTagBeforeParam()
+    {
+        // Arrange: an existing function comment that already documents a parameter.
+        var content = "/**\n * Gets the user.\n *\n * @param {string} id - The id.\n */\nexport function getUser(id: string): User {}\n";
+        var filePath = WriteFile("fn.ts", content);
+        var decl = new FunctionInfo("getUser", 6, "", new List<ParameterInfo>(), null,
+            HasComment: true, Kind: "function");
+        _parserMock.Setup(p => p.ParseFunctions(filePath)).Returns(new List<FunctionInfo> { decl });
+
+        // Act
+        await ProcessorWithTags("@deprecated").ProcessFileAsync(filePath);
+
+        // Assert: the tag lands after the description and before the existing @param.
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("@deprecated");
+        result.IndexOf("@deprecated", StringComparison.Ordinal)
+            .Should().BeLessThan(result.IndexOf("@param", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ProcessFileAsync_WithFlagAndTagOnlyMentionedInProse_StillAddsRealTag()
+    {
+        // Arrange: the description mentions "@deprecated" mid-sentence; that is not an
+        // actual tag, so the real tag must still be added.
+        var content = "/**\n * Mentions @deprecated in prose only.\n */\nexport class Legacy {}\n";
+        var filePath = WriteFile("prose.ts", content);
+        var decl = new FunctionInfo("Legacy", 4, "", new List<ParameterInfo>(), null,
+            HasComment: true, Kind: "class");
+        _parserMock.Setup(p => p.ParseFunctions(filePath)).Returns(new List<FunctionInfo> { decl });
+
+        // Act
+        await ProcessorWithTags("@deprecated").ProcessFileAsync(filePath);
+
+        // Assert: a real tag line is added (the prose mention did not suppress it).
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain(" * @deprecated");
+        (result.Split("@deprecated").Length - 1).Should().Be(2); // prose mention + real tag
+    }
+
+    [Fact]
+    public async Task ProcessFileAsync_WithFlagAndCommentedMember_LeavesMemberUntouched()
+    {
+        // Arrange: a commented member (kind=method) must NOT receive a tag.
+        var content = "/**\n * Gets the user.\n */\ngetUser(): void {}\n";
+        var filePath = WriteFile("member.ts", content);
+        var decl = new FunctionInfo("getUser", 4, "", new List<ParameterInfo>(), null,
+            HasComment: true, Kind: "method");
+        _parserMock.Setup(p => p.ParseFunctions(filePath)).Returns(new List<FunctionInfo> { decl });
+
+        // Act
+        await ProcessorWithTags("@deprecated").ProcessFileAsync(filePath);
+
+        // Assert
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Be(content);
+        result.Should().NotContain("@deprecated");
+    }
+
+    [Fact]
+    public async Task ProcessFileAsync_WithFlagAndNonJsDocComment_LeavesCommentUntouched()
+    {
+        // Arrange: a // line comment is not a JSDoc block; a @tag there is meaningless,
+        // so it is left as-is rather than corrupted.
+        var content = "// legacy service\nexport class Legacy {}\n";
+        var filePath = WriteFile("legacy.ts", content);
+        var decl = new FunctionInfo("Legacy", 2, "", new List<ParameterInfo>(), null,
+            HasComment: true, Kind: "class");
+        _parserMock.Setup(p => p.ParseFunctions(filePath)).Returns(new List<FunctionInfo> { decl });
+
+        // Act
+        await ProcessorWithTags("@deprecated").ProcessFileAsync(filePath);
+
+        // Assert
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Be(content);
+        result.Should().NotContain("@deprecated");
+    }
+
+    [Fact]
+    public async Task ProcessFileAsync_WithoutFlag_DoesNotTouchExistingComment()
+    {
+        // Arrange: without an annotation flag, a documented top-level declaration is
+        // left exactly as before (no update path).
+        var content = "/**\n * User Service.\n */\nexport class UserService {}\n";
+        var filePath = WriteFile("svc.ts", content);
+        var decl = new FunctionInfo("UserService", 4, "", new List<ParameterInfo>(), null,
+            HasComment: true, Kind: "class");
+        _parserMock.Setup(p => p.ParseFunctions(filePath)).Returns(new List<FunctionInfo> { decl });
+
+        // Act: _processor has no annotation tags configured.
+        await _processor.ProcessFileAsync(filePath);
+
+        // Assert
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Be(content);
+    }
 }

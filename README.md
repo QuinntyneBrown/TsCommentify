@@ -85,7 +85,9 @@ Optional flags add a JSDoc/TSDoc modifier tag to every generated **top-level dec
 | `--internal` | `@internal` |
 | `--public-api` (alias `--publicApi`) | `@publicApi` |
 
-The flags are combinable, and the tags are emitted in a fixed, canonical order (`@deprecated`, `@obsolete`, `@internal`, `@publicApi`) regardless of the order you pass them. They are placed immediately after the description and before any `@param`/`@returns` documentation. Declarations that already have a comment are skipped, so re-running never duplicates a tag.
+The flags are combinable, and the tags are emitted in a fixed, canonical order (`@deprecated`, `@obsolete`, `@internal`, `@publicApi`) regardless of the order you pass them. They are placed immediately after the description and before any `@param`/`@returns` documentation.
+
+**Updating existing comments.** If a top-level declaration *already* has a JSDoc (`/** … */`) comment, the requested tag is added to that existing block when it isn't already present — so you can retro-fit `@deprecated` onto already-documented code. The operation is idempotent (re-running never adds a duplicate), a single-line `/** … */` is expanded to multi-line to fit the tag, and members and non-JSDoc (`//`) comments are left untouched.
 
 ```bash
 tc src/legacy --deprecated --internal

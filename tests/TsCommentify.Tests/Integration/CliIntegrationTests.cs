@@ -484,6 +484,92 @@ export class Widget {
     }
 
     [Fact]
+    public async Task Cli_WithFlagAndExistingComment_AddsTagToExistingBlockAndIsIdempotent()
+    {
+        // Arrange: a class that already has a hand-written doc comment, plus an
+        // undocumented method.
+        var filePath = Path.Combine(_testDirectory, "user-service.ts");
+        var content = @"/**
+ * The user service.
+ */
+export class UserService {
+  getUser(): void {}
+}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath, "--deprecated");
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        // Existing description preserved; tag added to the existing block (not a new one).
+        result.Should().Contain("The user service.");
+        result.Should().NotContain("User Service."); // no duplicate generated class doc
+        result.Should().Contain("@deprecated");
+        (result.Split("@deprecated").Length - 1).Should().Be(1);
+        // The previously-undocumented member is documented, but not tagged.
+        result.Should().Contain("Gets the user.");
+
+        // Re-running is idempotent — the tag is not added a second time.
+        var secondExit = await RunCliAsync(filePath, "--deprecated");
+        secondExit.Should().Be(0);
+        var afterSecond = await File.ReadAllTextAsync(filePath);
+        (afterSecond.Split("@deprecated").Length - 1).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Cli_WithMultiLineDecoratorAndExistingComment_AddsTagToBlock()
+    {
+        // Arrange: a documented class whose decorator spans multiple lines (the common
+        // Angular pattern). The tag must be added to the comment above the decorator.
+        var filePath = Path.Combine(_testDirectory, "decorated-ml.ts");
+        var content = @"/**
+ * A widget component.
+ */
+@Component({
+  selector: 'app-widget',
+  template: '<div>Widget</div>'
+})
+export class Widget {}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath, "--deprecated");
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("A widget component.");
+        result.Should().Contain("@deprecated");
+        (result.Split("@deprecated").Length - 1).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Cli_WithFlagAndCommentAlreadyHasTag_DoesNotDuplicate()
+    {
+        // Arrange: the interface already carries @internal.
+        var filePath = Path.Combine(_testDirectory, "contract.ts");
+        var content = @"/**
+ * The contract.
+ *
+ * @internal
+ */
+export interface Contract {
+  id: string;
+}";
+        await File.WriteAllTextAsync(filePath, content);
+
+        // Act
+        var exitCode = await RunCliAsync(filePath, "--internal");
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        (result.Split("@internal").Length - 1).Should().Be(1);
+    }
+
+    [Fact]
     public async Task Cli_WithNonExistentPath_ReturnsError()
     {
         // Arrange

@@ -9,15 +9,6 @@ public class CommentGenerator : ICommentGenerator
     private readonly ILogger<CommentGenerator> _logger;
     private readonly CommentAnnotationOptions _annotations;
 
-    // Declaration kinds that represent a unit of API surface and therefore receive
-    // the optional @deprecated/@internal/etc. tags. Members (method, property,
-    // enum-member) are excluded: annotating the enclosing declaration already
-    // covers them, and stamping every member would be noise.
-    private static readonly HashSet<string> AnnotatableKinds = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "function", "class", "interface", "enum", "type",
-    };
-
     public CommentGenerator(ILogger<CommentGenerator> logger, CommentAnnotationOptions? annotations = null)
     {
         _logger = logger;
@@ -37,7 +28,7 @@ public class CommentGenerator : ICommentGenerator
         // Optional modifier tags (@deprecated, @internal, ...) requested via CLI
         // flags. Applied to top-level declarations only, placed immediately after
         // the description and before any @param/@returns documentation.
-        if (_annotations.Tags.Count > 0 && AnnotatableKinds.Contains(function.Kind))
+        if (_annotations.Tags.Count > 0 && DeclarationKinds.IsTopLevel(function.Kind))
         {
             comment.AppendLine(" *");
             foreach (var tag in _annotations.Tags)
