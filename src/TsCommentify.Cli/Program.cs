@@ -17,13 +17,16 @@ rootCommand.AddArgument(pathArgument);
 // (function/class/interface/enum/type) — not to individual members. Flags are
 // combinable; the tags are emitted in a fixed, canonical order.
 var deprecatedOption = new Option<bool>(
-    "--deprecated", "Add an @deprecated tag to generated top-level declaration comments.");
+    new[] { "--deprecated", "-d" },
+    "Add an @deprecated tag to generated top-level declaration comments.");
 var obsoleteOption = new Option<bool>(
-    "--obsolete", "Add an @obsolete tag to generated top-level declaration comments.");
+    new[] { "--obsolete", "-o" },
+    "Add an @obsolete tag to generated top-level declaration comments.");
 var internalOption = new Option<bool>(
-    "--internal", "Add an @internal tag to generated top-level declaration comments.");
+    new[] { "--internal", "-i" },
+    "Add an @internal tag to generated top-level declaration comments.");
 var publicApiOption = new Option<bool>(
-    new[] { "--public-api", "--publicApi" },
+    new[] { "--public-api", "--publicApi", "-p" },
     "Add an @publicApi tag to generated top-level declaration comments.");
 
 rootCommand.AddOption(deprecatedOption);

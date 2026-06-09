@@ -8,7 +8,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>tc</ToolCommandName>
     <PackageId>TsCommentify</PackageId>
-    <Version>1.6.0</Version>
+    <Version>1.6.1</Version>
     <Authors>Quinntyne Brown</Authors>
     <Description>A CLI tool that automatically generates JSDoc comments for TypeScript functions, methods, getters, setters, classes, interfaces (including their property and method signatures), enums (including their members), and type alias declarations. Uses a real TypeScript-compiler AST (via a bundled Node sidecar) when Node is available, falling back to an in-process parser otherwise. Supports configurable ignore patterns for test files, and optional flags to stamp @deprecated/@obsolete/@internal/@publicApi tags onto top-level declarations.</Description>
     <PackageTags>typescript;comments;documentation;cli;jsdoc;code-generator;interfaces;types;enums;classes;ast;deprecated;annotations</PackageTags>

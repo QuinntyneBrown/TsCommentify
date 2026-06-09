@@ -78,12 +78,12 @@ The tool will recursively scan all `.ts` and `.tsx` files in the directory and a
 
 Optional flags add a JSDoc/TSDoc modifier tag to every generated **top-level declaration** comment — functions, classes, interfaces, enums, and type aliases. The tags are *not* applied to members (methods, properties, enum members): annotating the declaration already covers its surface.
 
-| Flag | Tag added |
-|------|-----------|
-| `--deprecated` | `@deprecated` |
-| `--obsolete` | `@obsolete` |
-| `--internal` | `@internal` |
-| `--public-api` (alias `--publicApi`) | `@publicApi` |
+| Flag | Short | Tag added |
+|------|-------|-----------|
+| `--deprecated` | `-d` | `@deprecated` |
+| `--obsolete` | `-o` | `@obsolete` |
+| `--internal` | `-i` | `@internal` |
+| `--public-api` (alias `--publicApi`) | `-p` | `@publicApi` |
 
 The flags are combinable, and the tags are emitted in a fixed, canonical order (`@deprecated`, `@obsolete`, `@internal`, `@publicApi`) regardless of the order you pass them. They are placed immediately after the description and before any `@param`/`@returns` documentation.
 
@@ -91,6 +91,8 @@ The flags are combinable, and the tags are emitted in a fixed, canonical order (
 
 ```bash
 tc src/legacy --deprecated --internal
+# or, equivalently, with short aliases:
+tc src/legacy -d -i
 ```
 
 ```typescript

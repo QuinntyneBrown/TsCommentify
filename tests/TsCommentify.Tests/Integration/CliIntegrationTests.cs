@@ -421,6 +421,23 @@ export class Widget {
     }
 
     [Fact]
+    public async Task Cli_WithShortFlagAliases_AddsTags()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDirectory, "short.ts");
+        await File.WriteAllTextAsync(filePath, "export class Foo {}\n");
+
+        // Act: short aliases -d (--deprecated) and -i (--internal).
+        var exitCode = await RunCliAsync(filePath, "-d", "-i");
+
+        // Assert
+        exitCode.Should().Be(0);
+        var result = await File.ReadAllTextAsync(filePath);
+        result.Should().Contain("@deprecated");
+        result.Should().Contain("@internal");
+    }
+
+    [Fact]
     public async Task Cli_WithoutAnnotationFlags_AddsNoTags()
     {
         // Arrange
